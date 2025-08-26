@@ -1,0 +1,9 @@
+fastf1
+matplotlib
+seaborn
+pandas
+numpy
+jupyter
+plotly         # opcional, para gráficos interactivos
+scipy          # análisis estadístico
+
