@@ -1,16 +1,18 @@
 import fastf1
 import matplotlib.pyplot as plt
 import seaborn as sns
-from setup_fastf1 import setup_fastf1_cache
+import pandas as pd
+import os
+from datetime import datetime
 
-# Configurar cache
-setup_fastf1_cache()
+# Definir ruta
+CACHE_DIR = os.path.join(os.getcwd(), "cache")
 
+# Crear si no existe
+os.makedirs(CACHE_DIR, exist_ok=True)
 
-
-# Configurar cache
-setup_fastf1_cache()
-
+# Habilitar caché
+fastf1.Cache.enable_cache(CACHE_DIR)
 
 def elegir_gp(year: int):
     """Muestra el calendario de un año y permite elegir GP"""
