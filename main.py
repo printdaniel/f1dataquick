@@ -54,8 +54,40 @@ def elegir_sesion(evento):
             print("❌ Sesión inválida. Intenta de nuevo.")
 
 
+# def accion_comparar_pilotos():
+#     """Comparar ritmo entre pilotos en una sesión"""
+#     year = int(input("Año de la temporada (ej: 2025): "))
+#     evento = elegir_gp(year)
+#     sesion_tipo = elegir_sesion(evento)
+#
+#     print(f"\nCargando datos: {evento['EventName']} {year} - {sesion_tipo}...")
+#     session = fastf1.get_session(year, int(evento["RoundNumber"]), sesion_tipo)
+#     session.load()
+#
+#     # Pedir pilotos
+#     while True:
+#         pilotos = input("Introduce códigos de pilotos separados por coma (mínimo 2, ej: VER,LEC,HAM): ")
+#         pilotos = [p.strip().upper() for p in pilotos.split(",") if p.strip()]
+#         if len(pilotos) >= 2:
+#             break
+#         else:
+#             print("⚠️ Debes ingresar al menos 2 pilotos.")
+#
+#     # Filtrar vueltas rápidas de esos pilotos
+#     laps = session.laps.pick_drivers(pilotos).pick_quicklaps()
+#
+#     # Gráfico
+#     plt.figure(figsize=(10, 6))
+#     sns.boxplot(data=laps, x="Driver", y="LapTime", palette="Set2")
+#     plt.title(f"Comparación de ritmo - {evento['EventName']} {year} - {sesion_tipo}")
+#     plt.ylabel("Tiempo de vuelta")
+#     plt.xticks(rotation=45)
+#     plt.tight_layout()
+#     plt.show()
+#
+#
 def accion_comparar_pilotos():
-    """Comparar ritmo entre pilotos en una sesión"""
+    """Comparar ritmo entre pilotos en una sesión con violin plot"""
     year = int(input("Año de la temporada (ej: 2025): "))
     evento = elegir_gp(year)
     sesion_tipo = elegir_sesion(evento)
@@ -76,15 +108,20 @@ def accion_comparar_pilotos():
     # Filtrar vueltas rápidas de esos pilotos
     laps = session.laps.pick_drivers(pilotos).pick_quicklaps()
 
-    # Gráfico
+    # Gráfico con violin plot
     plt.figure(figsize=(10, 6))
-    sns.boxplot(data=laps, x="Driver", y="LapTime", palette="Set2")
+    sns.violinplot(
+        data=laps,
+        x="Driver",
+        y="LapTime",
+        palette="Set2",
+        inner="quartile"  # agrega líneas de cuartiles dentro del violín
+    )
     plt.title(f"Comparación de ritmo - {evento['EventName']} {year} - {sesion_tipo}")
     plt.ylabel("Tiempo de vuelta")
     plt.xticks(rotation=45)
     plt.tight_layout()
     plt.show()
-
 
 def accion_piloto_individual():
     """Ritmo de un piloto específico en una sesión"""
