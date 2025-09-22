@@ -17,46 +17,45 @@ fastf1.Cache.enable_cache(CACHE_DIR)
 
 driver_colors = {
     # Red Bull
-    "VER": "#3671C6",  # Verstappen
-    "PER": "#3671C6",  # Pérez
+    "VER": "#1E5BC6",  # Verstappen - Azul oscuro de Red Bull
+    "TSU": "#1E5BC6",  # Tsunoda
 
     # Ferrari
-    "LEC": "#E8002D",  # Leclerc
-    "SAI": "#E8002D",  # Sainz
+    "LEC": "#ED1C24",  # Leclerc - Rojo Ferrari
+    "HAM": "#ED1C24",  # Hamilton
 
     # Mercedes
-    "HAM": "#00D2BE",  # Hamilton
-    "RUS": "#00D2BE",  # Russell
+    "RUS": "#00A3B9",  # Russell - Cian/verde azulado de Mercedes
+    "ANT": "#00A3B9",  # Antonelli
 
     # McLaren
-    "NOR": "#FF8000",  # Norris
+    "NOR": "#FF8000",  # Norris - Naranja papaya de McLaren
     "PIA": "#FF8000",  # Piastri
 
     # Aston Martin
-    "ALO": "#229971",  # Alonso
-    "STR": "#229971",  # Stroll
+    "ALO": "#2D8266",  # Alonso - Verde británico de Aston Martin
+    "STR": "#2D8266",  # Stroll
 
     # Alpine
-    "GAS": "#0090FF",  # Gasly
-    "OCO": "#0090FF",  # Ocon
+    "GAS": "#0093D0",  # Gasly - Azul claro de Alpine
+    "COL": "#0093D0",  # Colapinto
 
     # Williams
-    "ALB": "#005AFF",  # Albon
-    "SAR": "#005AFF",  # Sargeant
+    "ALB": "#005AFF",  # Albon - Azul intenso de Williams
+    "SAI": "#005AFF",  # Sainz
 
     # Kick Sauber
-    "BOT": "#52E252",  # Bottas
-    "ZHO": "#52E252",  # Zhou
+    "HUL": "#00FF00",  # Hülkenberg - Verde neón de Kick Sauber
+    "BOR": "#00FF00",  # Bortoleto
 
     # Haas
-    "HUL": "#B6BABD",  # Hülkenberg
-    "MAG": "#B6BABD",  # Magnussen
+    "OCO": "#B0B6B8",  # Ocon - Gris plateado de Haas
+    "BEA": "#B0B6B8",  # Bearman
 
-    # RB (Visa Cash App RB)
-    "RIC": "#6692FF",  # Ricciardo
-    "TSU": "#6692FF",  # Tsunoda
+    # RB (Racing Bulls)
+    "LAW": "#6692FF",  # Lawson - Azul claro de RB
+    "HAD": "#6692FF",  # Hadjar
 }
-
 
 def elegir_gp(year: int):
     """Muestra el calendario de un año y permite elegir GP"""
@@ -96,136 +95,9 @@ def elegir_sesion(evento):
             return sesiones_validas[sesion]
         else:
             print("❌ Sesión inválida. Intenta de nuevo.")
-
-"""
-def accion_comparar_pilotos():
-    #Comparar ritmo entre pilotos en una sesión con violin plot (robusto).
-    year = int(input("Año de la temporada (ej: 2025): "))
-    evento = elegir_gp(year)             # tu función que devuelve la fila (Series) del evento
-    sesion_tipo = elegir_sesion(evento)  # tu función que devuelve el tipo de sesión, ej "R"
-
-    print(f"\nCargando datos: {evento['EventName']} {year} - {sesion_tipo}...")
-    session = fastf1.get_session(year, int(evento["RoundNumber"]), sesion_tipo)
-    session.load()
-
-    # Pedir pilotos
-    while True:
-        pilotos = input("Introduce códigos de pilotos separados por coma (mínimo 2, ej: VER,LEC,HAM): ")
-        pilotos = [p.strip().upper() for p in pilotos.split(",") if p.strip()]
-        if len(pilotos) >= 2:
-            break
-        else:
-            print("⚠️ Debes ingresar al menos 2 pilotos.")
-
-    # Filtrar vueltas rápidas de esos pilotos (FastF1 Laps obj)
-    laps = session.laps.pick_drivers(pilotos).pick_quicklaps()
-
-    # Convertir a DataFrame por seguridad
-    laps_df = pd.DataFrame(laps)  # si ya es DataFrame, esto lo deja igual
-
-    # --- Diagnóstico rápido (imprime para ver qué hay)
-    print("\n--- Diagnóstico de columnas y tipos ---")
-    print(laps_df.dtypes)
-    print("Pilotos encontrados:", sorted(laps_df['Driver'].unique().tolist()))
-    print("Primeras filas:")
-    print(laps_df[['Driver','LapTime','LapNumber']].head())
-
-    # Asegurar LapTimeSeconds (float)
-    if 'LapTime' not in laps_df.columns:
-        raise RuntimeError("No se encontró la columna 'LapTime' en los datos.")
-
-    # Si es timedelta, convertir; si es string, intentar parsear; si es numérico, usarlo.
-    if pd.api.types.is_timedelta64_dtype(laps_df['LapTime']):
-        laps_df['LapTimeSeconds'] = laps_df['LapTime'].dt.total_seconds()
-    else:
-        # Intento parsear si viene como string
-        try:
-            # Convierte strings tipo '0 days 00:01:23.456000' o '00:01:23.456'
-            laps_df['LapTime'] = pd.to_timedelta(laps_df['LapTime'])
-            laps_df['LapTimeSeconds'] = laps_df['LapTime'].dt.total_seconds()
-        except Exception:
-            # Por último, intentar forzar numérico (si ya está en segundos)
-            laps_df['LapTimeSeconds'] = pd.to_numeric(laps_df['LapTime'], errors='coerce')
-
-    # Quitar filas sin tiempo
-    laps_df = laps_df.dropna(subset=['LapTimeSeconds'])
-    if laps_df.empty:
-        raise RuntimeError("No quedan vueltas con tiempo válido después del filtrado.")
-
-    # Asegurar que la columna Driver sea string y los códigos estén en mayúsculas
-    laps_df['Driver'] = laps_df['Driver'].astype(str).str.upper()
-
-    # Forzar orden de pilotos (en el mismo orden que los ingresados por el usuario, si están presentes)
-    present_drivers = [d for d in pilotos if d in laps_df['Driver'].unique()]
-    if not present_drivers:
-        present_drivers = sorted(laps_df['Driver'].unique())
-    order = present_drivers
-
-    # Preparar paleta: si tienes driver_colors, generar lista en orden
-    # Si no existe driver_colors, usar palette 'Set2'
-    try:
-        palette_list = [driver_colors.get(d, "#888888") for d in order]
-    except Exception:
-        palette_list = None
-
-    # Crear carpeta para figuras
-    out_dir = "output/figures"
-    os.makedirs(out_dir, exist_ok=True)
-    fname = f"{out_dir}/violin_comparacion_{evento['EventName'].replace(' ','_')}_{year}_{sesion_tipo}.png"
-
-
-    # Plot: violin con puntos encima (stripplot)
-    plt.style.use("dark_background")
-    sns.set_theme(style="darkgrid")
-
-    fig, ax = plt.subplots(figsize=(12, 7))
-    sns.violinplot(
-        data=laps_df,
-        x="Driver",
-        y="LapTimeSeconds",
-        order=order,
-        palette=palette_list,
-        inner="quartile",
-        cut=0,
-        linewidth=1.0,
-        ax=ax
-    )
-
-    # Puntos individuales encima (más legible)
-    sns.stripplot(
-        data=laps_df,
-        x="Driver",
-        y="LapTimeSeconds",
-        order=order,
-        color='yellow',
-        size=3,
-        jitter=True,
-        alpha=0.6,
-        ax=ax
-    )
-
-    # Formatear eje Y en mm:ss.s (ej: 1:12.34)
-    def format_mmss(x, pos=None):
-        if pd.isna(x):
-            return ""
-        mins = int(x // 60)
-        secs = x % 60
-        return f"{mins}:{secs:05.2f}"
-
-    ax.yaxis.set_major_formatter(ticker.FuncFormatter(format_mmss))
-
-    # Forzar etiquetas visibles y color blanco
-    ax.tick_params(axis='x', labelrotation=45, labelcolor='white', labelsize=10)
-    ax.tick_params(axis='y', labelcolor='white', labelsize=10)
-    ax.set_xlabel("Piloto", color='white', fontsize=12)
-    ax.set_ylabel("Tiempo de vuelta (mm:ss.s)", color='white', fontsize=12)
-    ax.set_title(f"Comparación de ritmo - {evento['EventName']} {year} - {sesion_tipo}", color='white', fontsize=14)
-
-    plt.tight_layout()
-    plt.savefig(fname, dpi=300)
-    print(f"\nGráfico guardado en: {fname}")
-    plt.show()
-"""
+# ----------------------------------------------------------------------------
+# Comaración entre pilotos
+# ----------------------------------------------------------------------------
 def accion_comparar_pilotos():
     """Comparar ritmo entre pilotos en una sesión con violin plot (robusto)."""
     year = int(input("Año de la temporada (ej: 2025): "))
