@@ -97,7 +97,135 @@ def elegir_sesion(evento):
         else:
             print("❌ Sesión inválida. Intenta de nuevo.")
 
+"""
+def accion_comparar_pilotos():
+    #Comparar ritmo entre pilotos en una sesión con violin plot (robusto).
+    year = int(input("Año de la temporada (ej: 2025): "))
+    evento = elegir_gp(year)             # tu función que devuelve la fila (Series) del evento
+    sesion_tipo = elegir_sesion(evento)  # tu función que devuelve el tipo de sesión, ej "R"
 
+    print(f"\nCargando datos: {evento['EventName']} {year} - {sesion_tipo}...")
+    session = fastf1.get_session(year, int(evento["RoundNumber"]), sesion_tipo)
+    session.load()
+
+    # Pedir pilotos
+    while True:
+        pilotos = input("Introduce códigos de pilotos separados por coma (mínimo 2, ej: VER,LEC,HAM): ")
+        pilotos = [p.strip().upper() for p in pilotos.split(",") if p.strip()]
+        if len(pilotos) >= 2:
+            break
+        else:
+            print("⚠️ Debes ingresar al menos 2 pilotos.")
+
+    # Filtrar vueltas rápidas de esos pilotos (FastF1 Laps obj)
+    laps = session.laps.pick_drivers(pilotos).pick_quicklaps()
+
+    # Convertir a DataFrame por seguridad
+    laps_df = pd.DataFrame(laps)  # si ya es DataFrame, esto lo deja igual
+
+    # --- Diagnóstico rápido (imprime para ver qué hay)
+    print("\n--- Diagnóstico de columnas y tipos ---")
+    print(laps_df.dtypes)
+    print("Pilotos encontrados:", sorted(laps_df['Driver'].unique().tolist()))
+    print("Primeras filas:")
+    print(laps_df[['Driver','LapTime','LapNumber']].head())
+
+    # Asegurar LapTimeSeconds (float)
+    if 'LapTime' not in laps_df.columns:
+        raise RuntimeError("No se encontró la columna 'LapTime' en los datos.")
+
+    # Si es timedelta, convertir; si es string, intentar parsear; si es numérico, usarlo.
+    if pd.api.types.is_timedelta64_dtype(laps_df['LapTime']):
+        laps_df['LapTimeSeconds'] = laps_df['LapTime'].dt.total_seconds()
+    else:
+        # Intento parsear si viene como string
+        try:
+            # Convierte strings tipo '0 days 00:01:23.456000' o '00:01:23.456'
+            laps_df['LapTime'] = pd.to_timedelta(laps_df['LapTime'])
+            laps_df['LapTimeSeconds'] = laps_df['LapTime'].dt.total_seconds()
+        except Exception:
+            # Por último, intentar forzar numérico (si ya está en segundos)
+            laps_df['LapTimeSeconds'] = pd.to_numeric(laps_df['LapTime'], errors='coerce')
+
+    # Quitar filas sin tiempo
+    laps_df = laps_df.dropna(subset=['LapTimeSeconds'])
+    if laps_df.empty:
+        raise RuntimeError("No quedan vueltas con tiempo válido después del filtrado.")
+
+    # Asegurar que la columna Driver sea string y los códigos estén en mayúsculas
+    laps_df['Driver'] = laps_df['Driver'].astype(str).str.upper()
+
+    # Forzar orden de pilotos (en el mismo orden que los ingresados por el usuario, si están presentes)
+    present_drivers = [d for d in pilotos if d in laps_df['Driver'].unique()]
+    if not present_drivers:
+        present_drivers = sorted(laps_df['Driver'].unique())
+    order = present_drivers
+
+    # Preparar paleta: si tienes driver_colors, generar lista en orden
+    # Si no existe driver_colors, usar palette 'Set2'
+    try:
+        palette_list = [driver_colors.get(d, "#888888") for d in order]
+    except Exception:
+        palette_list = None
+
+    # Crear carpeta para figuras
+    out_dir = "output/figures"
+    os.makedirs(out_dir, exist_ok=True)
+    fname = f"{out_dir}/violin_comparacion_{evento['EventName'].replace(' ','_')}_{year}_{sesion_tipo}.png"
+
+
+    # Plot: violin con puntos encima (stripplot)
+    plt.style.use("dark_background")
+    sns.set_theme(style="darkgrid")
+
+    fig, ax = plt.subplots(figsize=(12, 7))
+    sns.violinplot(
+        data=laps_df,
+        x="Driver",
+        y="LapTimeSeconds",
+        order=order,
+        palette=palette_list,
+        inner="quartile",
+        cut=0,
+        linewidth=1.0,
+        ax=ax
+    )
+
+    # Puntos individuales encima (más legible)
+    sns.stripplot(
+        data=laps_df,
+        x="Driver",
+        y="LapTimeSeconds",
+        order=order,
+        color='yellow',
+        size=3,
+        jitter=True,
+        alpha=0.6,
+        ax=ax
+    )
+
+    # Formatear eje Y en mm:ss.s (ej: 1:12.34)
+    def format_mmss(x, pos=None):
+        if pd.isna(x):
+            return ""
+        mins = int(x // 60)
+        secs = x % 60
+        return f"{mins}:{secs:05.2f}"
+
+    ax.yaxis.set_major_formatter(ticker.FuncFormatter(format_mmss))
+
+    # Forzar etiquetas visibles y color blanco
+    ax.tick_params(axis='x', labelrotation=45, labelcolor='white', labelsize=10)
+    ax.tick_params(axis='y', labelcolor='white', labelsize=10)
+    ax.set_xlabel("Piloto", color='white', fontsize=12)
+    ax.set_ylabel("Tiempo de vuelta (mm:ss.s)", color='white', fontsize=12)
+    ax.set_title(f"Comparación de ritmo - {evento['EventName']} {year} - {sesion_tipo}", color='white', fontsize=14)
+
+    plt.tight_layout()
+    plt.savefig(fname, dpi=300)
+    print(f"\nGráfico guardado en: {fname}")
+    plt.show()
+"""
 def accion_comparar_pilotos():
     """Comparar ritmo entre pilotos en una sesión con violin plot (robusto)."""
     year = int(input("Año de la temporada (ej: 2025): "))
@@ -173,11 +301,20 @@ def accion_comparar_pilotos():
     os.makedirs(out_dir, exist_ok=True)
     fname = f"{out_dir}/violin_comparacion_{evento['EventName'].replace(' ','_')}_{year}_{sesion_tipo}.png"
 
-    # Plot: violin con puntos encima (stripplot)
-    plt.style.use("dark_background")
-    sns.set_theme(style="darkgrid")
+    # SOLUCIÓN: Usar solo un estilo y configurar explícitamente
+    plt.style.use("default")  # Resetear a estilo por defecto
+    sns.set_theme(style="darkgrid")  # Seaborn maneja el estilo
 
     fig, ax = plt.subplots(figsize=(12, 7))
+
+    # Verificar que tenemos datos para cada piloto
+    print(f"\n--- Verificación final antes del gráfico ---")
+    print(f"Pilotos en order: {order}")
+    for driver in order:
+        driver_data = laps_df[laps_df['Driver'] == driver]
+        print(f"Piloto {driver}: {len(driver_data)} vueltas")
+
+    # Crear el violin plot
     sns.violinplot(
         data=laps_df,
         x="Driver",
@@ -205,7 +342,7 @@ def accion_comparar_pilotos():
 
     # Formatear eje Y en mm:ss.s (ej: 1:12.34)
     def format_mmss(x, pos=None):
-        if pd.isna(x):
+        if pd.isna(x) or x <= 0:
             return ""
         mins = int(x // 60)
         secs = x % 60
@@ -213,16 +350,40 @@ def accion_comparar_pilotos():
 
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(format_mmss))
 
-    # Forzar etiquetas visibles y color blanco
-    ax.tick_params(axis='x', labelrotation=45, labelcolor='white', labelsize=10)
-    ax.tick_params(axis='y', labelcolor='white', labelsize=10)
-    ax.set_xlabel("Piloto", color='white', fontsize=12)
-    ax.set_ylabel("Tiempo de vuelta (mm:ss.s)", color='white', fontsize=12)
-    ax.set_title(f"Comparación de ritmo - {evento['EventName']} {year} - {sesion_tipo}", color='white', fontsize=14)
+    # CONFIGURACIÓN MEJORADA DE ETIQUETAS
+    # Asegurar que las etiquetas del eje X sean visibles
+    ax.set_xticks(range(len(order)))  # Forzar posiciones de ticks
+    ax.set_xticklabels(order, rotation=45, ha='right')  # Etiquetas explícitas
 
+    # Configurar colores para mejor contraste
+    ax.tick_params(axis='x', labelsize=12, colors='black')
+    ax.tick_params(axis='y', labelsize=10, colors='black')
+    ax.set_xlabel("Piloto", color='black', fontsize=12, fontweight='bold')
+    ax.set_ylabel("Tiempo de vuelta (mm:ss.ss)", color='black', fontsize=12, fontweight='bold')
+    ax.set_title(f"Comparación de ritmo - {evento['EventName']} {year} - {sesion_tipo}",
+                 color='black', fontsize=14, fontweight='bold')
+
+    # Añadir grid para mejor legibilidad
+    ax.grid(True, alpha=0.3)
+
+    # Asegurar que todo sea visible
+    plt.setp(ax.get_xticklabels(), visible=True)
+    plt.setp(ax.get_yticklabels(), visible=True)
+
+    # Ajustar layout y guardar
     plt.tight_layout()
-    plt.savefig(fname, dpi=300)
+    plt.savefig(fname, dpi=300, bbox_inches='tight', facecolor='white')
     print(f"\nGráfico guardado en: {fname}")
+
+    # Mostrar información adicional
+    print(f"\n--- Resumen estadístico ---")
+    for driver in order:
+        driver_times = laps_df[laps_df['Driver'] == driver]['LapTimeSeconds']
+        if len(driver_times) > 0:
+            avg_time = driver_times.mean()
+            best_time = driver_times.min()
+            print(f"{driver}: Mejor = {format_mmss(best_time)}, Media = {format_mmss(avg_time)}, Vueltas = {len(driver_times)}")
+
     plt.show()
 
 # ----------------------------------------------------------------------------
