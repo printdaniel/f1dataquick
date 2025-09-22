@@ -95,18 +95,22 @@ def elegir_sesion(evento):
             return sesiones_validas[sesion]
         else:
             print("❌ Sesión inválida. Intenta de nuevo.")
+
+def cargar_sesion():
+    """Solicita año, evento y tipo de sesión, y carga una sesión de FastF1."""
+    year = int(input("Año de la temporada (ej: 2025): "))
+    evento = elegir_gp(year)
+    sesion_tipo = elegir_sesion(evento)
+    print(f"\nCargando datos: {evento['EventName']} {year} - {sesion_tipo}...")
+    session = fastf1.get_session(year, int(evento["RoundNumber"]), sesion_tipo)
+    session.load()
+    return session, evento, year, sesion_tipo
 # ----------------------------------------------------------------------------
 # Comaración entre pilotos
 # ----------------------------------------------------------------------------
 def accion_comparar_pilotos():
     """Comparar ritmo entre pilotos en una sesión con violin plot (robusto)."""
-    year = int(input("Año de la temporada (ej: 2025): "))
-    evento = elegir_gp(year)             # tu función que devuelve la fila (Series) del evento
-    sesion_tipo = elegir_sesion(evento)  # tu función que devuelve el tipo de sesión, ej "R"
-
-    print(f"\nCargando datos: {evento['EventName']} {year} - {sesion_tipo}...")
-    session = fastf1.get_session(year, int(evento["RoundNumber"]), sesion_tipo)
-    session.load()
+    session, evento, year, sesion_tipo = cargar_sesion()
 
     # Pedir pilotos
     while True:
@@ -263,13 +267,8 @@ def accion_comparar_pilotos():
 # ----------------------------------------------------------------------------
 def accion_piloto_individual():
     """Ritmo de un piloto específico en una sesión"""
-    year = int(input("Año de la temporada (ej: 2025): "))
-    evento = elegir_gp(year)
-    sesion_tipo = elegir_sesion(evento)
-
-    print(f"\nCargando datos: {evento['EventName']} {year} - {sesion_tipo}...")
-    session = fastf1.get_session(year, int(evento["RoundNumber"]), sesion_tipo)
-    session.load()
+    # Cargar sesión usando la función común
+    session, evento, year, sesion_tipo = cargar_sesion()
 
     piloto = input("Código de piloto (ej: VER, HAM, ALO): ").upper()
 
@@ -288,7 +287,6 @@ def accion_piloto_individual():
 
 def salir():
     print("👋 Saliendo del programa... Hasta la próxima!")
-
 
 def menu_principal():
     while True:
