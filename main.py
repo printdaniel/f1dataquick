@@ -5,6 +5,7 @@ import pandas as pd
 import os
 from datetime import datetime
 import matplotlib.ticker as ticker
+from datetime import timedelta
 
 # Definir ruta
 CACHE_DIR = os.path.join(os.getcwd(), "cache")
@@ -283,25 +284,6 @@ def accion_piloto_individual():
     plt.legend()
     plt.tight_layout()
     plt.show()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-import pandas as pd
-import fastf1
-from datetime import timedelta
 
 def accion_comparar_tiempos_vuelta():
     """Compara tiempos de vuelta entre pilotos en formato de tabla detallada."""
@@ -605,6 +587,7 @@ def menu_principal():
             break
         else:
             print("❌ Opción no válida. Por favor, elige un número del 1 al 3.")
+
 if __name__ == "__main__":
     menu_principal()
 
