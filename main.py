@@ -589,7 +589,7 @@ def menu_principal():
         print("\n--- Menú Principal ---")
         print("[ 1 ]. Comparar ritmo entre pilotos")
         print("[ 2 ]. Ritmo de un piloto específico")
-        print("[ 3 ]. Ritmo tiempos de vuelta")
+        print("[ 3 ]. Tiempos de vuelta")
         print("[ 4 ]. Salir")
 
         opcion = input("Elige una opción (1, 2, 3): ")
