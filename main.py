@@ -741,7 +741,7 @@ def menu_principal():
         print("[ 4 ]. Eficiencia Aerodinámica")
         print("[ 5 ]. Salir")
 
-        opcion = input("Elige una opción (1, 2, 3): ")
+        opcion = input("Elige una opción: ")
 
         if opcion == '1':
             accion_comparar_pilotos()
