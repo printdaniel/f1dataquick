@@ -17,7 +17,9 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 # Habilitar caché
 fastf1.Cache.enable_cache(CACHE_DIR)
 
-
+# ----------------------------------------------------------------------------
+#  Funciones utilitarias (cambiar este nombre horrible)
+# ----------------------------------------------------------------------------
 
 def elegir_gp(year: int):
     """Muestra el calendario de un año y permite elegir GP"""
@@ -245,6 +247,10 @@ def accion_piloto_individual():
     plt.legend()
     plt.tight_layout()
     plt.show()
+
+# ----------------------------------------------------------------------------
+# Comparación tiempos por vuelta
+# ----------------------------------------------------------------------------
 
 def accion_comparar_tiempos_vuelta():
     """Compara tiempos de vuelta entre pilotos en formato de tabla detallada."""
@@ -523,6 +529,16 @@ def mostrar_resumen_estadistico(laps_df, pilotos, evento, year, sesion_tipo):
               f"{formatear_tiempo(stats['Mediana']):<12} "
               f"{consistencia:<12} "
               f"{stats['Vueltas']:<8}{reset_code}")
+# ----------------------------------------------------------------------------
+# Rendimiento aerodinámico
+# ----------------------------------------------------------------------------
+
+
+
+
+
+
+
 
 def salir():
     print("👋 Saliendo del programa... Hasta la próxima!")
@@ -551,4 +567,3 @@ def menu_principal():
 
 if __name__ == "__main__":
     menu_principal()
-
