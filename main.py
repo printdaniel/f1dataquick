@@ -545,7 +545,7 @@ def mostrar_resumen_estadistico(laps_df, pilotos, evento, year, sesion_tipo):
               f"{consistencia:<12} "
               f"{stats['Vueltas']:<8}{reset_code}")
 # ----------------------------------------------------------------------------
-# Rendimiento aerodinámico
+# Eficiencia aerodinámica por equipo
 # ----------------------------------------------------------------------------
 def accion_eficiencia_aerodinamica_detallada():
     """Versión más detallada que usa datos específicos de la trampa de velocidad."""
@@ -727,7 +727,7 @@ def crear_grafico_eficiencia_recta(resultados_equipos, evento, year, sesion_tipo
 
     plt.show()
 
-
+# ==========================================================================
 def salir():
     print("👋 Saliendo del programa... Hasta la próxima!")
 
@@ -755,7 +755,7 @@ def menu_principal():
             salir()
             break
         else:
-            print("❌ Opción no válida. Por favor, elige un número del 1 al 3.")
+            print("❌ Opción no válida. Por favor, elige un número del 1 al 5.")
 
 if __name__ == "__main__":
     menu_principal()
