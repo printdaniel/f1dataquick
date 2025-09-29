@@ -1,3 +1,4 @@
+import constantes
 import fastf1
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -6,7 +7,8 @@ import os
 from datetime import datetime
 import matplotlib.ticker as ticker
 from datetime import timedelta
-import constantes
+import numpy as np
+
 
 # Definir ruta
 CACHE_DIR = os.path.join(os.getcwd(), "cache")
@@ -52,7 +54,6 @@ def elegir_gp(year: int):
         except ValueError:
             print("❌ Ingresa un número válido.")
 
-
 def elegir_sesion(evento):
     """Permite elegir tipo de sesión disponible"""
     sesiones_validas = {
@@ -82,6 +83,7 @@ def cargar_sesion():
     session = fastf1.get_session(year, int(evento["RoundNumber"]), sesion_tipo)
     session.load()
     return session, evento, year, sesion_tipo
+
 # ----------------------------------------------------------------------------
 # Comaración entre pilotos
 # ----------------------------------------------------------------------------
@@ -613,10 +615,7 @@ def accion_eficiencia_aerodinamica_detallada():
 def crear_grafico_eficiencia_detallada(resultados_equipos, evento, year, sesion_tipo):
     """Crea el gráfico de eficiencia aerodinámica detallado."""
 
-    import matplotlib.pyplot as plt
-    import numpy as np
-
-    # Configuración del estilo
+        # Configuración del estilo
     plt.style.use('default')
     sns.set_theme(style="whitegrid")
 
