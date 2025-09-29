@@ -41,3 +41,15 @@ driver_colors = {
 }
 
 
+team_colors_2025 = {
+    "Red Bull": "#1E5BC6",  # Azul oscuro característico
+    "Ferrari": "#ED1C24",   # Rosso Corsa (rojo Ferrari)
+    "Mercedes": "#00D7B6",  # Plateado/cian con toques de negro
+    "McLaren": "#FF8000",   # Naranja papaya
+    "Aston Martin": "#2D8266",  # Verde británico
+    "Alpine": "#0093D0",    # Azul claro de Renault
+    "Williams": "#005AFF",  # Azul oscuro elegante
+    "Kick Sauber": "#00FF00",  # Verde neón
+    "Haas": "#B0B6B8",      # Gris plateado
+    "Racing Bulls": "#F4F6F5"  # Blanco predominante
+}
