@@ -603,7 +603,7 @@ def accion_eficiencia_aerodinamica_detallada():
             print(f"  ✅ {equipo}: Vavg={velocidad_promedio:.1f} km/h, Vmax={velocidad_maxima:.1f} km/h, Vtrampa={velocidad_trampa:.1f} km/h")
 
         if resultados_equipos:
-            crear_grafico_eficiencia_detallada(resultados_equipos, evento, year, sesion_tipo)
+            crear_grafico_eficiencia_recta(resultados_equipos, evento, year, sesion_tipo)
         else:
             print("❌ No se pudieron procesar datos para ningún equipo")
 
@@ -612,90 +612,114 @@ def accion_eficiencia_aerodinamica_detallada():
         import traceback
         traceback.print_exc()
 
-def crear_grafico_eficiencia_detallada(resultados_equipos, evento, year, sesion_tipo):
-    """Crea el gráfico de eficiencia aerodinámica detallado."""
 
-        # Configuración del estilo
+def crear_grafico_eficiencia_recta(resultados_equipos, evento, year, sesion_tipo):
+    """Crea el gráfico de eficiencia en recta: Velocidad en Trampa vs Velocidad Promedio."""
+
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    # Configuración del estilo
     plt.style.use('default')
     sns.set_theme(style="whitegrid")
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
+    fig, ax = plt.subplots(figsize=(14, 10))
 
     # Preparar datos
     equipos = list(resultados_equipos.keys())
     v_promedio = [resultados_equipos[eq]['velocidad_promedio'] for eq in equipos]
-    v_maxima = [resultados_equipos[eq]['velocidad_maxima'] for eq in equipos]
     v_trampa = [resultados_equipos[eq]['velocidad_trampa'] for eq in equipos]
 
-   # GRÁFICO 1: Velocidad Máxima vs Velocidad Promedio
-
+    # Crear scatter plot - Solo eficiencia en recta
     for i, equipo in enumerate(equipos):
         color = team_colors_2025.get(equipo, '#888888')
-        ax1.scatter(v_promedio[i], v_maxima[i], c=color, s=150, alpha=0.8,
-                   edgecolors='black', linewidth=1.5, label=equipo)
+
+        # Punto principal
+        ax.scatter(v_promedio[i], v_trampa[i], c=color, s=200, alpha=0.8,
+                   edgecolors='black', linewidth=2, label=equipo)
+
+        # Etiqueta con nombre del equipo
+        ax.annotate(equipo,
+                   (v_promedio[i], v_trampa[i]),
+                   xytext=(10, 10), textcoords='offset points',
+                   fontsize=10, fontweight='bold',
+                   bbox=dict(boxstyle='round,pad=0.3', facecolor=color, alpha=0.7),
+                   arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
 
     # Línea de tendencia
     if len(v_promedio) > 1:
-        z = np.polyfit(v_promedio, v_maxima, 1)
+        z = np.polyfit(v_promedio, v_trampa, 1)
         p = np.poly1d(z)
-        ax1.plot(v_promedio, p(v_promedio), "r--", alpha=0.7, linewidth=2,
+        ax.plot(v_promedio, p(v_promedio), "r--", alpha=0.7, linewidth=2,
                 label=f'Tendencia (pendiente: {z[0]:.2f})')
 
-    ax1.set_xlabel('Velocidad Promedio (km/h)', fontsize=12, fontweight='bold')
-    ax1.set_ylabel('Velocidad Máxima (km/h)', fontsize=12, fontweight='bold')
-    ax1.set_title('Eficiencia General: Vmax vs Vpromedio', fontsize=14, fontweight='bold')
-    ax1.grid(True, alpha=0.3)
-    ax1.legend(loc='best', fontsize=9)
+    # Configurar ejes y título
+    ax.set_xlabel('Velocidad Promedio (km/h)', fontsize=14, fontweight='bold')
+    ax.set_ylabel('Velocidad en Trampa de Velocidad (km/h)', fontsize=14, fontweight='bold')
 
-    # GRÁFICO 2: Velocidad en Trampa vs Velocidad Promedio
-    for i, equipo in enumerate(equipos):
-        color = team_colors_2025.get(equipo, '#888888')
-        ax2.scatter(v_promedio[i], v_trampa[i], c=color, s=150, alpha=0.8,
-                   edgecolors='black', linewidth=1.5, label=equipo)
+    titulo = f"Eficiencia en Recta - {evento['EventName']} {year} - {sesion_tipo}"
+    ax.set_title(titulo, fontsize=16, fontweight='bold', pad=20)
 
-    # Línea de tendencia
+    # Cuadrícula
+    ax.grid(True, alpha=0.3)
+    ax.set_axisbelow(True)
+
+    # Leyenda de tendencia
     if len(v_promedio) > 1:
-        z2 = np.polyfit(v_promedio, v_trampa, 1)
-        p2 = np.poly1d(z2)
-        ax2.plot(v_promedio, p2(v_promedio), "r--", alpha=0.7, linewidth=2,
-                label=f'Tendencia (pendiente: {z2[0]:.2f})')
+        ax.legend(loc='best')
 
-    ax2.set_xlabel('Velocidad Promedio (km/h)', fontsize=12, fontweight='bold')
-    ax2.set_ylabel('Velocidad en Trampa (km/h)', fontsize=12, fontweight='bold')
-    ax2.set_title('Eficiencia en Recta: Vtrampa vs Vpromedio', fontsize=14, fontweight='bold')
-    ax2.grid(True, alpha=0.3)
-    ax2.legend(loc='best', fontsize=9)
-
-    # Título general
-    fig.suptitle(f'Eficiencia Aerodinámica - {evento["EventName"]} {year} - {sesion_tipo}',
-                 fontsize=16, fontweight='bold', y=0.98)
+    # Ajustar límites de ejes
+    margen_x = (max(v_promedio) - min(v_promedio)) * 0.1
+    margen_y = (max(v_trampa) - min(v_trampa)) * 0.1
+    ax.set_xlim(min(v_promedio) - margen_x, max(v_promedio) + margen_x)
+    ax.set_ylim(min(v_trampa) - margen_y, max(v_trampa) + margen_y)
 
     # Mostrar tabla de datos
-    print(f"\n📋 DATOS DETALLADOS DE EFICIENCIA AERODINÁMICA:")
-    print("="*100)
-    print(f"{'Equipo':<15} {'Piloto':<8} {'Vuelta':<6} {'Vavg':<8} {'Vmax':<8} {'Vtrampa':<8} {'Diff Vmax-Vavg':<12} {'Eficiencia':<10}")
-    print("-"*100)
+    print(f"\n📋 DATOS DE EFICIENCIA EN RECTA:")
+    print("="*90)
+    print(f"{'Equipo':<15} {'Piloto':<8} {'Vuelta':<6} {'Vavg':<8} {'Vtrampa':<10} {'Diferencia':<12} {'Eficiencia':<12}")
+    print("-"*90)
 
     for equipo in sorted(equipos, key=lambda x: resultados_equipos[x]['velocidad_promedio'], reverse=True):
         datos = resultados_equipos[equipo]
-        diff_vmax_vavg = datos['velocidad_maxima'] - datos['velocidad_promedio']
+        diferencia = datos['velocidad_trampa'] - datos['velocidad_promedio']
         eficiencia = (datos['velocidad_trampa'] / datos['velocidad_promedio'] - 1) * 100
 
         print(f"{equipo:<15} {datos['piloto']:<8} {datos['vuelta_numero']:<6} "
-              f"{datos['velocidad_promedio']:<8.1f} {datos['velocidad_maxima']:<8.1f} "
-              f"{datos['velocidad_trampa']:<8.1f} {diff_vmax_vavg:<12.1f} {eficiencia:<10.1f}%")
+              f"{datos['velocidad_promedio']:<8.1f} {datos['velocidad_trampa']:<10.1f} "
+              f"{diferencia:<12.1f} {eficiencia:<12.1f}%")
 
-    # Análisis interpretativo
-    print(f"\n💡 INTERPRETACIÓN:")
-    print("• Alta Vpromedio + Alta Vmax: Excelente eficiencia aerodinámica")
-    print("• Alta Vmax + Baja Vpromedio: Buen motor, mala downforce en curvas")
-    print("• Baja Vmax + Alta Vpromedio: Buen downforce, motor limitado")
-    print("• Alta diferencia Vtrampa-Vpromedio: Buen rendimiento en rectas")
+    # Análisis interpretativo mejorado
+    print(f"\n💡 INTERPRETACIÓN DEL GRÁFICO:")
+    print("• 📈 ALTA Vpromedio + ALTA Vtrampa: Excelente eficiencia aerodinámica (equipo completo)")
+    print("• 🚀 BAJA Vpromedio + ALTA Vtrampa: Buen motor/eficiencia en rectas, pero mala downforce en curvas")
+    print("• 🏎️  ALTA Vpromedio + BAJA Vtrampa: Buen downforce en curvas, pero motor limitado en rectas")
+    print("• 📉 BAJA Vpromedio + BAJA Vtrampa: Problemas generales de rendimiento")
+    print(f"• 📊 Diferencia Vtrampa-Vpromedio: Indica la ganancia específica en rectas")
+
+    # Calcular y mostrar rankings
+    print(f"\n🏆 RANKING POR EFICIENCIA EN RECTA:")
+    print("="*60)
+
+    # Ranking por eficiencia (% ganancia en rectas)
+    ranking_eficiencia = sorted(equipos,
+                               key=lambda x: (resultados_equipos[x]['velocidad_trampa'] / resultados_equipos[x]['velocidad_promedio'] - 1) * 100,
+                               reverse=True)
+
+    print(f"{'Pos':<4} {'Equipo':<15} {'Eficiencia':<12} {'Vtrampa':<10}")
+    print("-"*60)
+    for i, equipo in enumerate(ranking_eficiencia, 1):
+        datos = resultados_equipos[equipo]
+        eficiencia = (datos['velocidad_trampa'] / datos['velocidad_promedio'] - 1) * 100
+        color_code = "\033[92m" if i == 1 else "\033[93m" if i == 2 else "\033[91m" if i == 3 else ""
+        reset_code = "\033[0m" if i <= 3 else ""
+
+        print(f"{color_code}{i:<4} {equipo:<15} {eficiencia:<11.1f}% {datos['velocidad_trampa']:<9.1f}{reset_code}")
 
     # Guardar gráfico
     out_dir = "output/figures"
     os.makedirs(out_dir, exist_ok=True)
-    filename = f"{out_dir}/eficiencia_aerodinamica_detallada_{evento['EventName'].replace(' ','_')}_{year}_{sesion_tipo}.png"
+    filename = f"{out_dir}/eficiencia_recta_{evento['EventName'].replace(' ','_')}_{year}_{sesion_tipo}.png"
 
     plt.tight_layout()
     plt.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white')
@@ -703,95 +727,11 @@ def crear_grafico_eficiencia_detallada(resultados_equipos, evento, year, sesion_
 
     plt.show()
 
-# Y también corregimos la función principal para que sea más robusta
-def accion_eficiencia_aerodinamica():
-    """Analiza la eficiencia aerodinámica: Velocidad máxima vs Velocidad promedio por equipo."""
-
-    try:
-        session, evento, year, sesion_tipo = cargar_sesion()
-    except Exception as e:
-        print(f"❌ Error al cargar sesión: {e}")
-        return
-
-    print(f"\n📊 Analizando eficiencia aerodinámica - {evento['EventName']} {year} - {sesion_tipo}...")
-
-    try:
-        # Obtener todas las vueltas y filtrar las rápidas
-        all_laps = session.laps
-        laps = all_laps.pick_quicklaps()
-
-        if len(laps) == 0:
-            print("⚠️ No se encontraron vueltas rápidas, usando todas las vueltas...")
-            laps = all_laps
-
-        # Obtener equipos únicos
-        equipos = laps['Team'].dropna().unique()
-        print(f"🏁 Equipos encontrados: {', '.join(equipos)}")
-
-        if len(equipos) == 0:
-            print("❌ No se encontraron equipos en los datos")
-            return
-
-    except Exception as e:
-        print(f"❌ Error al cargar datos: {e}")
-        import traceback
-        traceback.print_exc()
-        return
-
-    # Diccionario para almacenar resultados por equipo
-    resultados_equipos = {}
-
-    for equipo in equipos:
-        try:
-            print(f"🔍 Procesando {equipo}...")
-
-            # Filtrar vueltas del equipo
-            laps_equipo = laps[laps['Team'] == equipo]
-
-            if len(laps_equipo) == 0:
-                print(f"  ⚠️ No hay vueltas para {equipo}")
-                continue
-
-            # Encontrar la vuelta más rápida del equipo
-            vuelta_rapida_equipo = laps_equipo.loc[laps_equipo['LapTime'].idxmin()]
-
-            # Obtener telemetría de esa vuelta
-            telemetria = vuelta_rapida_equipo.get_telemetry()
-
-            if telemetria is None or len(telemetria) == 0:
-                print(f"  ⚠️ No hay telemetría para {equipo}")
-                continue
-
-            # Calcular velocidades
-            velocidad_maxima = telemetria['Speed'].max()
-            velocidad_promedio = telemetria['Speed'].mean()
-
-            # Almacenar resultados
-            resultados_equipos[equipo] = {
-                'velocidad_maxima': velocidad_maxima,
-                'velocidad_promedio': velocidad_promedio,
-                'piloto': vuelta_rapida_equipo['Driver'],
-                'tiempo_vuelta': vuelta_rapida_equipo['LapTime'],
-                'vuelta_numero': vuelta_rapida_equipo['LapNumber']
-            }
-
-            print(f"  ✅ {equipo}: Vmax={velocidad_maxima:.1f} km/h, Vavg={velocidad_promedio:.1f} km/h")
-
-        except Exception as e:
-            print(f"  ❌ Error procesando {equipo}: {e}")
-            continue
-
-    if not resultados_equipos:
-        print("❌ No se pudieron procesar datos para ningún equipo")
-        return
-
-    # Crear el gráfico
-    crear_grafico_eficiencia_aerodinamica(resultados_equipos, evento, year, sesion_tipo)
-
 
 def salir():
     print("👋 Saliendo del programa... Hasta la próxima!")
 
+# ==========================================================================
 def menu_principal():
     while True:
         print("\n--- Menú Principal ---")
