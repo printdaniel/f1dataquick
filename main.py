@@ -245,23 +245,164 @@ def accion_comparar_pilotos():
 # Pilot inividual
 # ----------------------------------------------------------------------------
 def accion_piloto_individual():
-    """Ritmo de un piloto específico en una sesión"""
+    """Ritmo de un piloto específico en una sesión con análisis de compuestos"""
     # Cargar sesión usando la función común
     session, evento, year, sesion_tipo = cargar_sesion()
 
     piloto = input("Código de piloto (ej: VER, HAM, ALO): ").upper()
 
-    laps = session.laps.pick_driver(piloto).pick_quicklaps()
+    # Obtener todas las vueltas del piloto (no solo las rápidas)
+    laps = session.laps.pick_driver(piloto)
 
-    plt.figure(figsize=(12, 6))
-    plt.plot(laps["LapNumber"], laps["LapTime"].dt.total_seconds(),
-             marker="o", label=piloto)
-    plt.title(f"Ritmo de {piloto} - {evento['EventName']} {year} - {sesion_tipo}")
-    plt.xlabel("Número de vuelta")
-    plt.ylabel("Tiempo de vuelta (s)")
-    plt.legend()
+    if laps.empty:
+        print(f"❌ No se encontraron vueltas para el piloto {piloto}")
+        return
+
+    # Convertir a DataFrame para mayor control
+    laps_df = pd.DataFrame(laps)
+
+    # Procesar tiempos de vuelta
+    if 'LapTime' in laps_df.columns and pd.api.types.is_timedelta64_dtype(laps_df['LapTime']):
+        laps_df['LapTimeSeconds'] = laps_df['LapTime'].dt.total_seconds()
+    else:
+        print("⚠️ No se pudieron procesar los tiempos de vuelta")
+        return
+
+    # Filtrar vueltas válidas
+    laps_df = laps_df.dropna(subset=['LapTimeSeconds'])
+    laps_df = laps_df[laps_df['LapTimeSeconds'] > 0]
+
+    if laps_df.empty:
+        print(f"❌ No hay vueltas válidas para el piloto {piloto}")
+        return
+
+    # Mapeo de colores para compuestos
+    compound_colors = {
+        'SOFT': 'red',        # Blandos - Rojo
+        'MEDIUM': 'yellow',   # Medios - Amarillo
+        'HARD': 'white',      # Duros - Blanco
+        'INTERMEDIATE': 'green',  # Intermedios - Verde
+        'WET': 'blue'         # Lluvia - Azul
+    }
+
+    # Crear el gráfico
+    plt.style.use('default')
+    sns.set_theme(style="whitegrid")
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
+
+    # GRÁFICO 1: Violin plot con puntos por compuesto
+    # Preparar datos para el violin plot
+    tiempos_totales = laps_df['LapTimeSeconds'].dropna()
+
+    # Crear violin plot base
+    violin_parts = ax1.violinplot([tiempos_totales], showmeans=True, showmedians=True)
+
+    # Personalizar el violin plot
+    for pc in violin_parts['bodies']:
+        pc.set_facecolor('lightblue')
+        pc.set_alpha(0.6)
+
+    violin_parts['cmeans'].set_color('red')
+    violin_parts['cmedians'].set_color('black')
+
+    # Añadir puntos individuales coloreados por compuesto
+    for idx, lap in laps_df.iterrows():
+        compound = lap['Compound'] if pd.notna(lap['Compound']) else 'UNKNOWN'
+        color = compound_colors.get(compound, 'gray')
+
+        # Jitter para evitar superposición de puntos
+        jitter = np.random.normal(0, 0.02)
+
+        ax1.scatter(1 + jitter, lap['LapTimeSeconds'],
+                   c=color, s=50, alpha=0.7, edgecolors='black', linewidth=0.5,
+                   label=compound if compound not in [l.get_label() for l in ax1.collections] else "")
+
+    ax1.set_xlabel('Distribución', fontsize=12, fontweight='bold')
+    ax1.set_ylabel('Tiempo de Vuelta (segundos)', fontsize=12, fontweight='bold')
+    ax1.set_title(f'Distribución de Tiempos - {piloto}', fontsize=14, fontweight='bold')
+    ax1.set_xticks([1])
+    ax1.set_xticklabels([f'{piloto}\n(n={len(tiempos_totales)} vueltas)'])
+
+    # Formatear eje Y en mm:ss
+    def format_segundos(x, pos=None):
+        if pd.isna(x) or x <= 0:
+            return ""
+        mins = int(x // 60)
+        secs = x % 60
+        return f"{mins}:{secs:05.2f}"
+
+    ax1.yaxis.set_major_formatter(plt.FuncFormatter(format_segundos))
+
+    # GRÁFICO 2: Evolución de tiempos por vuelta con compuestos
+    laps_df_sorted = laps_df.sort_values('LapNumber')
+
+    # Scatter plot por número de vuelta
+    for idx, lap in laps_df_sorted.iterrows():
+        compound = lap['Compound'] if pd.notna(lap['Compound']) else 'UNKNOWN'
+        color = compound_colors.get(compound, 'gray')
+
+        ax2.scatter(lap['LapNumber'], lap['LapTimeSeconds'],
+                   c=color, s=60, alpha=0.8, edgecolors='black', linewidth=0.8,
+                   label=compound if compound not in [l.get_label() for l in ax2.collections] else "")
+
+    # Línea que conecta los puntos
+    ax2.plot(laps_df_sorted['LapNumber'], laps_df_sorted['LapTimeSeconds'],
+            'gray', alpha=0.3, linewidth=1)
+
+    ax2.set_xlabel('Número de Vuelta', fontsize=12, fontweight='bold')
+    ax2.set_ylabel('Tiempo de Vuelta', fontsize=12, fontweight='bold')
+    ax2.set_title(f'Evolución de Tiempos - {piloto}', fontsize=14, fontweight='bold')
+    ax2.yaxis.set_major_formatter(plt.FuncFormatter(format_segundos))
+    ax2.grid(True, alpha=0.3)
+
+    # Leyenda unificada para compuestos
+    handles_labels = {}
+    for ax in [ax1, ax2]:
+        for handle, label in zip(*ax.get_legend_handles_labels()):
+            if label not in handles_labels:
+                handles_labels[label] = handle
+
+    # Crear leyenda única
+    if handles_labels:
+        fig.legend(handles_labels.values(), handles_labels.keys(),
+                  title="Compuestos", loc='upper center',
+                  bbox_to_anchor=(0.5, 0.05), ncol=len(handles_labels))
+
+    # Título general
+    fig.suptitle(f'Análisis de Ritmo - {piloto} - {evento["EventName"]} {year} - {sesion_tipo}',
+                 fontsize=16, fontweight='bold', y=0.98)
+
+    # Estadísticas resumen
+    print(f"\n📊 ESTADÍSTICAS DE {piloto}:")
+    print("="*50)
+    print(f"Vueltas totales: {len(laps_df)}")
+    print(f"Mejor tiempo: {format_segundos(laps_df['LapTimeSeconds'].min())}")
+    print(f"Tiempo promedio: {format_segundos(laps_df['LapTimeSeconds'].mean())}")
+    print(f"Consistencia (std): {laps_df['LapTimeSeconds'].std():.2f} segundos")
+
+    # Análisis por compuestos
+    if 'Compound' in laps_df.columns:
+        print(f"\n🏁 ANÁLISIS POR COMPUESTOS:")
+        compounds_used = laps_df['Compound'].value_counts()
+        for compound, count in compounds_used.items():
+            if pd.notna(compound):
+                compound_times = laps_df[laps_df['Compound'] == compound]['LapTimeSeconds']
+                if len(compound_times) > 0:
+                    print(f"  {compound}: {count} vueltas | Mejor: {format_segundos(compound_times.min())} | Promedio: {format_segundos(compound_times.mean())}")
+
     plt.tight_layout()
+    plt.subplots_adjust(bottom=0.15)  # Espacio para la leyenda
     plt.show()
+
+    # Opcional: Guardar gráfico
+    guardar = input("¿Guardar gráfico? (s/n): ").lower()
+    if guardar == 's':
+        out_dir = "output/figures"
+        os.makedirs(out_dir, exist_ok=True)
+        filename = f"{out_dir}/ritmo_individual_{piloto}_{evento['EventName'].replace(' ','_')}_{year}_{sesion_tipo}.png"
+        plt.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white')
+        print(f"💾 Gráfico guardado en: {filename}")
 
 # ----------------------------------------------------------------------------
 # Comparación tiempos por vuelta
