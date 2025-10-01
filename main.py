@@ -407,7 +407,6 @@ def accion_piloto_individual():
 # ----------------------------------------------------------------------------
 # Comparación tiempos por vuelta
 # ----------------------------------------------------------------------------
-
 def accion_comparar_tiempos_vuelta():
     """Compara tiempos de vuelta entre pilotos en formato de tabla detallada."""
 
@@ -876,8 +875,8 @@ def salir():
 def menu_principal():
     while True:
         print("\n--- Menú Principal ---")
-        print("[ 1 ]. Comparar ritmo entre pilotos")
-        print("[ 2 ]. Ritmo de un piloto específico")
+        print("[ 1 ]. Comparar ritmo de carrera entre pilotos")
+        print("[ 2 ]. Ritmo de carrera de un piloto específico")
         print("[ 3 ]. Tiempos de vuelta")
         print("[ 4 ]. Eficiencia Aerodinámica")
         print("[ 5 ]. Salir")
