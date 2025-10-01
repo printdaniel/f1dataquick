@@ -8,5 +8,16 @@ desarrollo de cada carrera de la temporada 2025.
 ---
 
 ## 📂 Estructura del proyecto
-
-
+.
+├── cache
+│   ├── 2025
+│   └── fastf1_http_cache.sqlite
+├── constantes.py
+├── main.py
+├── output
+│   └── figures
+├── __pycache__
+│   └── constantes.cpython-311.pyc
+├── README.md
+├── requirements.txt
+└── scripts
