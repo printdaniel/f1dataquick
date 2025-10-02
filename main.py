@@ -1017,41 +1017,73 @@ def monitor_disponibilidad_automatico():
 
 # ==========================================================================
 def salir():
-    print("👋 Saliendo del programa... Hasta la próxima!")
+    """Función mejorada para salir del programa"""
+    print("\n" + "🎌" * 25)
+    print("   ¡Gracias por usar el analizador F1!")
+    print("   Desarrollado para amantes del motorsport 🏎️")
+    print("🎌" * 25)
+
+
+def mostrar_banner():
+    """Muestra un banner atractivo para el menú principal"""
+    banner = """
+    ╔═══════════════════════════════════════════════╗
+    ║              🏎️  F1 ANALYTICS PRO             ║
+    ║           Análisis Avanzado de F1             ║
+    ╚═══════════════════════════════════════════════╝
+    """
+    print(banner)
 
 # ==========================================================================
 def menu_principal():
     while True:
-        print("\n--- Menú Principal ---")
-        print("[ 1 ]. Comparar ritmo entre pilotos")
-        print("[ 2 ]. Ritmo de un piloto específico")
-        print("[ 3 ]. Tiempos de vuelta")
-        print("[ 4 ]. Eficiencia Aerodinámica")
-        print("[ 5 ]. Verificar disponibilidad de datos")
-        print("[ 6 ]. Monitor automático de disponibilidad")
-        print("[ 7 ]. Salir")
+        mostrar_banner()
 
-        opcion = input("Elige una opción (1-7): ")
+        print("📊 **ANÁLISIS DE RITMO Y VELOCIDAD**")
+        print("┌─────────────────────────────────────────────────┐")
+        print("│  🎯 1. Comparar ritmo entre pilotos             │")
+        print("│  🏁 2. Ritmo de un piloto específico           │")
+        print("│  ⏱️  3. Tabla de tiempos de vuelta             │")
+        print("│  🚀 4. Eficiencia aerodinámica                 │")
+        print("├─────────────────────────────────────────────────┤")
+        print("│  🔍 5. Verificar disponibilidad de datos       │")
+        print("│  📡 6. Monitor automático de disponibilidad    │")
+        print("├─────────────────────────────────────────────────┤")
+        print("│  ❌ 7. Salir del programa                      │")
+        print("└─────────────────────────────────────────────────┘")
+
+        print("\n" + "═" * 50)
+        opcion = input("   🎯 Selecciona una opción (1-7): ").strip()
+        print("═" * 50)
 
         if opcion == '1':
+            print("\n🚀 Iniciando comparación de ritmo entre pilotos...")
             accion_comparar_pilotos()
         elif opcion == '2':
+            print("\n🏎️  Analizando ritmo individual de piloto...")
             accion_piloto_individual()
         elif opcion == '3':
+            print("\n⏱️  Generando tabla de tiempos de vuelta...")
             accion_comparar_tiempos_vuelta()
         elif opcion == '4':
+            print("\n📊 Analizando eficiencia aerodinámica...")
             accion_eficiencia_aerodinamica_detallada()
         elif opcion == '5':
+            print("\n🔍 Verificando disponibilidad de datos...")
             verificar_disponibilidad_datos()
         elif opcion == '6':
+            print("\n📡 Iniciando monitor automático...")
             monitor_disponibilidad_automatico()
         elif opcion == '7':
-            salir()
+            print("\n" + "✨" * 25)
+            print("   ¡Gracias por usar F1 Analytics Pro!")
+            print("   ¡Hasta la próxima carrera! 🏁")
+            print("✨" * 25)
             break
         else:
-            print("❌ Opción no válida. Por favor, elige un número del 1 al 7.")
+            print("\n❌ Opción no válida. Por favor, elige un número del 1 al 7.")
+            input("   Presiona Enter para continuar...")
 
-
-
+# También podemos mejorar la función de salida si existe
 if __name__ == "__main__":
     menu_principal()
