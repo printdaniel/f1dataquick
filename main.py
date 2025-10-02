@@ -19,7 +19,6 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 # Habilitar caché
 fastf1.Cache.enable_cache(CACHE_DIR)
 
-
 team_colors_2025 = {
     "Red Bull": "#1E5BC6",  # Azul oscuro característico
     "Ferrari": "#ED1C24",   # Rosso Corsa (rojo Ferrari)
@@ -867,6 +866,155 @@ def crear_grafico_eficiencia_recta(resultados_equipos, evento, year, sesion_tipo
 
     plt.show()
 
+
+# ==========================================================================
+# Verificación de disponibilidad de datos
+# ==========================================================================
+def verificar_disponibilidad_datos():
+    """
+    Verifica si los datos de una sesión específica están disponibles.
+    Utiliza las funciones existentes elegir_gp() y elegir_sesion()
+    """
+
+    try:
+        print(f"\n🔍 VERIFICADOR DE DISPONIBILIDAD DE DATOS")
+        print("=" * 50)
+
+        # Usar las funciones existentes para seleccionar sesión
+        year = int(input("Año de la temporada (ej: 2024, 2025): "))
+        evento = elegir_gp(year)
+        sesion_tipo = elegir_sesion(evento)
+
+        print(f"\n📡 Verificando: {evento['EventName']} {year} - {sesion_tipo}")
+        print("-" * 50)
+
+        # Obtener la sesión usando RoundNumber
+        session = fastf1.get_session(year, int(evento["RoundNumber"]), sesion_tipo)
+
+        # Diccionario para almacenar resultados
+        disponibilidad = {
+            'sesion_encontrada': False,
+            'datos_basicos': False,
+            'telemetria': False,
+            'vueltas_validas': 0,
+            'pilotos_presentes': [],
+            'error': None,
+            'evento': evento['EventName'],
+            'year': year,
+            'sesion_tipo': sesion_tipo
+        }
+
+        # 1. Verificar si la sesión existe
+        try:
+            session.load(telemetry=False, laps=False, weather=False, messages=False)
+            disponibilidad['sesion_encontrada'] = True
+            print("✅ Sesión encontrada en el sistema")
+        except Exception as e:
+            disponibilidad['error'] = f"Sesión no encontrada: {e}"
+            print(f"❌ Sesión no encontrada: {e}")
+            return disponibilidad
+
+        # 2. Verificar datos básicos (laps)
+        try:
+            session.load(laps=True, telemetry=False, weather=False)
+            laps = session.laps
+            if len(laps) > 0:
+                disponibilidad['datos_basicos'] = True
+                disponibilidad['vueltas_validas'] = len(laps)
+                pilotos = laps['Driver'].unique()
+                disponibilidad['pilotos_presentes'] = list(pilotos)
+
+                print(f"✅ Datos básicos disponibles")
+                print(f"   • Vueltas registradas: {len(laps)}")
+                print(f"   • Pilotos presentes: {', '.join(pilotos)}")
+            else:
+                print("⚠️ Sesión encontrada pero sin vueltas registradas")
+
+        except Exception as e:
+            print(f"❌ Error cargando datos básicos: {e}")
+
+        # 3. Verificar telemetría
+        try:
+            # Intentar cargar telemetría de una vuelta aleatoria
+            if len(session.laps) > 0:
+                sample_lap = session.laps.iloc[0]
+                telemetry = sample_lap.get_telemetry()
+
+                if telemetry is not None and len(telemetry) > 0:
+                    disponibilidad['telemetria'] = True
+                    print(f"✅ Telemetría disponible")
+                    print(f"   • Puntos de datos: {len(telemetry)}")
+                else:
+                    print("⚠️ Telemetría no disponible aún")
+            else:
+                print("⚠️ No hay vueltas para verificar telemetría")
+
+        except Exception as e:
+            print(f"❌ Error cargando telemetría: {e}")
+
+        # Resumen final
+        print("-" * 50)
+        if disponibilidad['datos_basicos']:
+            print("🎯 ESTADO: Datos básicos LISTOS para análisis")
+            if disponibilidad['telemetria']:
+                print("       + Telemetría DISPONIBLE - Análisis completo posible")
+            else:
+                print("       - Telemetría NO disponible - Solo análisis básico")
+        else:
+            print("💤 ESTADO: Datos NO disponibles aún")
+
+        return disponibilidad
+
+    except Exception as e:
+        error_msg = f"Error general: {e}"
+        print(f"❌ {error_msg}")
+        return {
+            'sesion_encontrada': False,
+            'datos_basicos': False,
+            'telemetria': False,
+            'vueltas_validas': 0,
+            'pilotos_presentes': [],
+            'error': error_msg
+        }
+
+def monitor_disponibilidad_automatico():
+    """Monitor automático que verifica cada 5 minutos hasta que los datos estén disponibles"""
+    import time
+
+    print(f"\n🔍 MONITOR AUTOMÁTICO DE DISPONIBILIDAD")
+    print("=" * 50)
+
+    # Usar las funciones existentes para seleccionar sesión
+    year = int(input("Año de la temporada (ej: 2024, 2025): "))
+    evento = elegir_gp(year)
+    sesion_tipo = elegir_sesion(evento)
+
+    print(f"\n🎯 Monitorando: {evento['EventName']} {year} - {sesion_tipo}")
+    print("Este script verificará cada 5 minutos hasta que los datos estén disponibles")
+    print("Presiona Ctrl+C para detener\n")
+
+    intentos = 0
+    while True:
+        intentos += 1
+        print(f"\n📡 Intento #{intentos} - {time.strftime('%H:%M:%S')}")
+
+        try:
+            session = fastf1.get_session(year, int(evento["RoundNumber"]), sesion_tipo)
+            session.load(laps=True, telemetry=False)
+
+            if len(session.laps) > 0:
+                print(f"🎉 ¡DATOS DISPONIBLES! - {len(session.laps)} vueltas registradas")
+                print("Puedes comenzar tu análisis.")
+                break
+            else:
+                print(f"⏳ Datos no disponibles aún. Próxima verificación en 5 minutos...")
+                time.sleep(300)  # Esperar 5 minutos
+
+        except Exception as e:
+            print(f"❌ Error: {e}")
+            print(f"⏳ Reintentando en 5 minutos...")
+            time.sleep(300)  # Esperar 5 minutos
+
 # ==========================================================================
 def salir():
     print("👋 Saliendo del programa... Hasta la próxima!")
@@ -875,27 +1023,35 @@ def salir():
 def menu_principal():
     while True:
         print("\n--- Menú Principal ---")
-        print("[ 1 ]. Comparar ritmo de carrera entre pilotos")
-        print("[ 2 ]. Ritmo de carrera de un piloto específico")
+        print("[ 1 ]. Comparar ritmo entre pilotos")
+        print("[ 2 ]. Ritmo de un piloto específico")
         print("[ 3 ]. Tiempos de vuelta")
         print("[ 4 ]. Eficiencia Aerodinámica")
-        print("[ 5 ]. Salir")
+        print("[ 5 ]. Verificar disponibilidad de datos")
+        print("[ 6 ]. Monitor automático de disponibilidad")
+        print("[ 7 ]. Salir")
 
-        opcion = input("Elige una opción: ")
+        opcion = input("Elige una opción (1-7): ")
 
         if opcion == '1':
             accion_comparar_pilotos()
         elif opcion == '2':
             accion_piloto_individual()
         elif opcion == '3':
-            accion_comparar_tiempos_vuelta()  # Nueva función de tabla
+            accion_comparar_tiempos_vuelta()
         elif opcion == '4':
             accion_eficiencia_aerodinamica_detallada()
         elif opcion == '5':
+            verificar_disponibilidad_datos()
+        elif opcion == '6':
+            monitor_disponibilidad_automatico()
+        elif opcion == '7':
             salir()
             break
         else:
-            print("❌ Opción no válida. Por favor, elige un número del 1 al 5.")
+            print("❌ Opción no válida. Por favor, elige un número del 1 al 7.")
+
+
 
 if __name__ == "__main__":
     menu_principal()
