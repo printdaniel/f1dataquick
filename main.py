@@ -751,7 +751,6 @@ def accion_eficiencia_aerodinamica_detallada():
         import traceback
         traceback.print_exc()
 
-
 def crear_grafico_eficiencia_recta(resultados_equipos, evento, year, sesion_tipo):
     """Crea el gráfico de eficiencia en recta: Velocidad en Trampa vs Velocidad Promedio."""
 
@@ -769,21 +768,20 @@ def crear_grafico_eficiencia_recta(resultados_equipos, evento, year, sesion_tipo
     v_promedio = [resultados_equipos[eq]['velocidad_promedio'] for eq in equipos]
     v_trampa = [resultados_equipos[eq]['velocidad_trampa'] for eq in equipos]
 
-    # Crear scatter plot - Solo eficiencia en recta
+    # Crear scatter plot con etiquetas en los puntos
     for i, equipo in enumerate(equipos):
         color = team_colors_2025.get(equipo, '#888888')
 
         # Punto principal
         ax.scatter(v_promedio[i], v_trampa[i], c=color, s=200, alpha=0.8,
-                   edgecolors='black', linewidth=2, label=equipo)
+                   edgecolors='black', linewidth=2)
 
-        # Etiqueta con nombre del equipo
+        # Etiqueta con nombre del equipo - SIN recuadro de anotaciones
         ax.annotate(equipo,
                    (v_promedio[i], v_trampa[i]),
-                   xytext=(10, 10), textcoords='offset points',
-                   fontsize=10, fontweight='bold',
-                   bbox=dict(boxstyle='round,pad=0.3', facecolor=color, alpha=0.7),
-                   arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
+                   xytext=(5, 5), textcoords='offset points',  # Offset más pequeño
+                   fontsize=9, fontweight='bold',
+                   alpha=0.9)  # Texto simple sin caja
 
     # Línea de tendencia
     if len(v_promedio) > 1:
@@ -803,7 +801,7 @@ def crear_grafico_eficiencia_recta(resultados_equipos, evento, year, sesion_tipo
     ax.grid(True, alpha=0.3)
     ax.set_axisbelow(True)
 
-    # Leyenda de tendencia
+    # Leyenda de tendencia (opcional, solo si hay línea de tendencia)
     if len(v_promedio) > 1:
         ax.legend(loc='best')
 
@@ -865,6 +863,9 @@ def crear_grafico_eficiencia_recta(resultados_equipos, evento, year, sesion_tipo
     print(f"\n💾 Gráfico guardado en: {filename}")
 
     plt.show()
+
+
+
 
 
 # ==========================================================================
