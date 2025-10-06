@@ -760,7 +760,7 @@ def crear_grafico_eficiencia_recta(resultados_equipos, evento, year, sesion_tipo
 
     # Configuración del estilo
     plt.style.use('default')
-    sns.set_theme(style="whitegrid")
+    sns.set_theme(style="darkgrid")
 
     fig, ax = plt.subplots(figsize=(14, 10))
 
