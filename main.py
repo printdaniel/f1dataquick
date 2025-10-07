@@ -1,4 +1,4 @@
-from constantes import team_colors_2025, driver_colors, sesiones_validas
+from constantes import *
 import fastf1
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -8,7 +8,6 @@ from datetime import datetime
 import matplotlib.ticker as ticker
 from datetime import timedelta
 import numpy as np
-
 
 # Definir ruta
 CACHE_DIR = os.path.join(os.getcwd(), "cache")
@@ -22,7 +21,6 @@ fastf1.Cache.enable_cache(CACHE_DIR)
 # ----------------------------------------------------------------------------
 #  Funciones utilitarias (cambiar este nombre horrible)
 # ----------------------------------------------------------------------------
-
 def elegir_gp(year: int):
     """Muestra el calendario de un año y permite elegir GP"""
     schedule = fastf1.get_event_schedule(year)
@@ -135,7 +133,7 @@ def accion_comparar_pilotos():
     os.makedirs(out_dir, exist_ok=True)
     fname = f"{out_dir}/violin_comparacion_{evento['EventName'].replace(' ','_')}_{year}_{sesion_tipo}.png"
 
-    # SOLUCIÓN: Usar solo un estilo y configurar explícitamente
+    # Estilo y tema
     plt.style.use("default")  # Resetear a estilo por defecto
     sns.set_theme(style="darkgrid")  # Seaborn maneja el estilo
 
@@ -166,9 +164,9 @@ def accion_comparar_pilotos():
     data=laps_df,
     x="Driver",
     y="LapTimeSeconds",
-    hue="Driver",           # ← NUEVO: asignación explícita
+    hue="Driver",           # asignación explícita
     order=order,
-    palette="light:yellow",  # ← CORREGIDO: en lugar de color='yellow'
+    palette="light:yellow",  # CORREGIDO: en lugar de color='yellow'
     size=3,
     jitter=True,
     alpha=0.7,
@@ -258,15 +256,6 @@ def accion_piloto_individual():
     if laps_df.empty:
         print(f"❌ No hay vueltas válidas para el piloto {piloto}")
         return
-
-    # Mapeo de colores para compuestos
-    compound_colors = {
-        'SOFT': 'red',        # Blandos - Rojo
-        'MEDIUM': 'yellow',   # Medios - Amarillo
-        'HARD': 'white',      # Duros - Blanco
-        'INTERMEDIATE': 'green',  # Intermedios - Verde
-        'WET': 'blue'         # Lluvia - Azul
-    }
 
     # Crear el gráfico
     plt.style.use('default')
@@ -667,6 +656,7 @@ def mostrar_resumen_estadistico(laps_df, pilotos, evento, year, sesion_tipo):
               f"{formatear_tiempo(stats['Mediana']):<12} "
               f"{consistencia:<12} "
               f"{stats['Vueltas']:<8}{reset_code}")
+
 # ----------------------------------------------------------------------------
 # Eficiencia aerodinámica por equipo
 # ----------------------------------------------------------------------------
@@ -737,9 +727,6 @@ def accion_eficiencia_aerodinamica_detallada():
 
 def crear_grafico_eficiencia_recta(resultados_equipos, evento, year, sesion_tipo):
     """Crea el gráfico de eficiencia en recta: Velocidad en Trampa vs Velocidad Promedio."""
-
-    import matplotlib.pyplot as plt
-    import numpy as np
 
     # Configuración del estilo
     plt.style.use('default')

@@ -1,3 +1,5 @@
+# Mapeo de color para pilotos
+
 driver_colors = {
     # Red Bull
     "VER": "#1E5BC6",  # Verstappen - Azul oscuro de Red Bull
@@ -41,6 +43,7 @@ driver_colors = {
 }
 
 
+# ----------------------------------------------------------------------------
 team_colors_2025 = {
     "Red Bull": "#1E5BC6",  # Azul oscuro característico
     "Ferrari": "#ED1C24",   # Rosso Corsa (rojo Ferrari)
@@ -54,6 +57,7 @@ team_colors_2025 = {
     "Racing Bulls": "#F4F6F5"  # Blanco predominante
 }
 
+# ----------------------------------------------------------------------------
 # Permite elegir tipo de sesión disponible
 sesiones_validas = {
         "FP1": "FP1",
@@ -61,4 +65,14 @@ sesiones_validas = {
         "FP3": "FP3",
         "Q": "Qualifying",
         "R": "Race"
+    }
+
+# ----------------------------------------------------------------------------
+# Mapeo de colores para compuestos
+compound_colors = {
+        'SOFT': 'red',        # Blandos - Rojo
+        'MEDIUM': 'yellow',   # Medios - Amarillo
+        'HARD': 'white',      # Duros - Blanco
+        'INTERMEDIATE': 'green',  # Intermedios - Verde
+        'WET': 'blue'         # Lluvia - Azul
     }
