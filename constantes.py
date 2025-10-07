@@ -53,3 +53,12 @@ team_colors_2025 = {
     "Haas": "#B0B6B8",      # Gris plateado
     "Racing Bulls": "#F4F6F5"  # Blanco predominante
 }
+
+# Permite elegir tipo de sesión disponible
+sesiones_validas = {
+        "FP1": "FP1",
+        "FP2": "FP2",
+        "FP3": "FP3",
+        "Q": "Qualifying",
+        "R": "Race"
+    }
