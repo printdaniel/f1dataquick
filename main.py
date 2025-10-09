@@ -4,9 +4,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 import os
-from datetime import datetime
 import matplotlib.ticker as ticker
 from datetime import timedelta
+from datetime import datetime
 import numpy as np
 
 # Definir ruta
@@ -1230,3 +1230,5 @@ def menu_principal():
 # También podemos mejorar la función de salida si existe
 if __name__ == "__main__":
     menu_principal()
+
+# Test recatoring
