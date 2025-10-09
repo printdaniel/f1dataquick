@@ -1,3 +1,4 @@
+# main.py - Análisis de Datos de Fórmula 1
 from constantes import *
 import fastf1
 import matplotlib.pyplot as plt
@@ -8,6 +9,23 @@ import matplotlib.ticker as ticker
 from datetime import timedelta
 from datetime import datetime
 import numpy as np
+import logging
+from functools import lru_cache
+
+# Configuración de logging
+def setup_logging():
+    """Configura el sistema de logging"""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler('f1_analytics.log'),
+            logging.StreamHandler()
+        ]
+    )
+    return logging.getLogger(__name__)
+
+logger = setup_logging()
 
 # Definir ruta
 CACHE_DIR = os.path.join(os.getcwd(), "cache")
@@ -19,27 +37,33 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 fastf1.Cache.enable_cache(CACHE_DIR)
 
 # ----------------------------------------------------------------------------
-#  Funciones utilitarias (cambiar este nombre horrible)
+#  Funciones utilitarias
 # ----------------------------------------------------------------------------
 def elegir_gp(year: int):
     """Muestra el calendario de un año y permite elegir GP"""
-    schedule = fastf1.get_event_schedule(year)
-    print(f"\n--- Calendario {year} ---")
-    for idx, row in schedule.iterrows():
-        print(f"[ {row['RoundNumber']:2d} ] {row['EventName']} - {row['EventDate'].date()}")
+    try:
+        schedule = fastf1.get_event_schedule(year)
+        print(f"\n--- Calendario {year} ---")
+        for idx, row in schedule.iterrows():
+            print(f"[ {row['RoundNumber']:2d} ] {row['EventName']} - {row['EventDate'].date()}")
 
-    while True:
-        try:
-            ronda = int(input("Elige el número de ronda (ej: 1, 2, 3...): "))
-            if ronda in schedule["RoundNumber"].values:
-                evento = schedule.loc[schedule["RoundNumber"] == ronda].iloc[0]
-                return evento
-            else:
-                print("❌ Ronda inválida, intenta de nuevo.")
-        except ValueError:
-            print("❌ Ingresa un número válido.")
+        while True:
+            try:
+                ronda = int(input("Elige el número de ronda (ej: 1, 2, 3...): "))
+                if ronda in schedule["RoundNumber"].values:
+                    evento = schedule.loc[schedule["RoundNumber"] == ronda].iloc[0]
+                    logger.info(f"Evento seleccionado: {evento['EventName']} - Ronda {ronda}")
+                    return evento
+                else:
+                    print("❌ Ronda inválida, intenta de nuevo.")
+            except ValueError:
+                print("❌ Ingresa un número válido.")
+    except Exception as e:
+        logger.error(f"Error al obtener calendario: {e}")
+        raise
 
 def elegir_sesion(evento):
+    """Permite elegir el tipo de sesión"""
     print("\n--- Sesiones disponibles ---")
     for k, v in sesiones_validas.items():
         print(f"{k:4s} → {v}")
@@ -47,362 +71,416 @@ def elegir_sesion(evento):
     while True:
         sesion = input("Elige sesión (FP1, FP2, FP3, Q, R): ").upper()
         if sesion in sesiones_validas:
+            logger.info(f"Sesión seleccionada: {sesiones_validas[sesion]}")
             return sesiones_validas[sesion]
         else:
             print("❌ Sesión inválida. Intenta de nuevo.")
 
+@lru_cache(maxsize=32)
+def cargar_sesion_cached(year, ronda, sesion_tipo):
+    """Carga una sesión con cache para mejor rendimiento"""
+    try:
+        session = fastf1.get_session(year, ronda, sesion_tipo)
+        session.load()
+        logger.info(f"Sesión cargada: {year} Ronda {ronda} - {sesion_tipo}")
+        return session
+    except Exception as e:
+        logger.error(f"Error cargando sesión: {e}")
+        raise
+
 def cargar_sesion():
     """Solicita año, evento y tipo de sesión, y carga una sesión de FastF1."""
-    year = int(input("Año de la temporada (ej: 2025): "))
-    evento = elegir_gp(year)
-    sesion_tipo = elegir_sesion(evento)
-    print(f"\nCargando datos: {evento['EventName']} {year} - {sesion_tipo}...")
-    session = fastf1.get_session(year, int(evento["RoundNumber"]), sesion_tipo)
-    session.load()
-    return session, evento, year, sesion_tipo
+    try:
+        year = int(input("Año de la temporada (ej: 2025): "))
+        evento = elegir_gp(year)
+        sesion_tipo = elegir_sesion(evento)
+        print(f"\nCargando datos: {evento['EventName']} {year} - {sesion_tipo}...")
+        session = cargar_sesion_cached(year, int(evento["RoundNumber"]), sesion_tipo)
+        return session, evento, year, sesion_tipo
+    except Exception as e:
+        logger.error(f"Error en cargar_sesion: {e}")
+        raise
+
+def verificar_datos_sesion(session):
+    """Verificación comprehensiva de datos disponibles"""
+    checks = {
+        'laps': len(session.laps) > 0,
+        'drivers': len(session.drivers) > 0,
+        'telemetry': False,
+        'weather': hasattr(session, 'weather_data') and session.weather_data is not None
+    }
+
+    # Verificar telemetría
+    if checks['laps']:
+        try:
+            sample_lap = session.laps.iloc[0]
+            telemetry = sample_lap.get_telemetry()
+            checks['telemetry'] = len(telemetry) > 0 if telemetry is not None else False
+        except Exception as e:
+            logger.warning(f"No se pudo verificar telemetría: {e}")
+            checks['telemetry'] = False
+
+    logger.info(f"Verificación de datos: {checks}")
+    return checks
 
 # ----------------------------------------------------------------------------
-# Comaración entre pilotos
+# Comparación entre pilotos - CORREGIDO
 # ----------------------------------------------------------------------------
 def accion_comparar_pilotos():
     """Comparar ritmo entre pilotos en una sesión con violin plot (robusto)."""
-    session, evento, year, sesion_tipo = cargar_sesion()
-
-    # Pedir pilotos
-    while True:
-        pilotos = input("Introduce códigos de pilotos separados por coma (mínimo 2, ej: VER,LEC,HAM): ")
-        pilotos = [p.strip().upper() for p in pilotos.split(",") if p.strip()]
-        if len(pilotos) >= 2:
-            break
-        else:
-            print("⚠️ Debes ingresar al menos 2 pilotos.")
-
-    # Filtrar vueltas rápidas de esos pilotos (FastF1 Laps obj)
-    laps = session.laps.pick_drivers(pilotos).pick_quicklaps()
-
-    # Convertir a DataFrame por seguridad
-    laps_df = pd.DataFrame(laps)  # si ya es DataFrame, esto lo deja igual
-
-    # --- Diagnóstico rápido (imprime para ver qué hay)
-    print("\n--- Diagnóstico de columnas y tipos ---")
-    print(laps_df.dtypes)
-    print("Pilotos encontrados:", sorted(laps_df['Driver'].unique().tolist()))
-    print("Primeras filas:")
-    print(laps_df[['Driver','LapTime','LapNumber']].head())
-
-    # Asegurar LapTimeSeconds (float)
-    if 'LapTime' not in laps_df.columns:
-        raise RuntimeError("No se encontró la columna 'LapTime' en los datos.")
-
-    # Si es timedelta, convertir; si es string, intentar parsear; si es numérico, usarlo.
-    if pd.api.types.is_timedelta64_dtype(laps_df['LapTime']):
-        laps_df['LapTimeSeconds'] = laps_df['LapTime'].dt.total_seconds()
-    else:
-        # Intento parsear si viene como string
-        try:
-            # Convierte strings tipo '0 days 00:01:23.456000' o '00:01:23.456'
-            laps_df['LapTime'] = pd.to_timedelta(laps_df['LapTime'])
-            laps_df['LapTimeSeconds'] = laps_df['LapTime'].dt.total_seconds()
-        except Exception:
-            # Por último, intentar forzar numérico (si ya está en segundos)
-            laps_df['LapTimeSeconds'] = pd.to_numeric(laps_df['LapTime'], errors='coerce')
-
-    # Quitar filas sin tiempo
-    laps_df = laps_df.dropna(subset=['LapTimeSeconds'])
-    if laps_df.empty:
-        raise RuntimeError("No quedan vueltas con tiempo válido después del filtrado.")
-
-    # Asegurar que la columna Driver sea string y los códigos estén en mayúsculas
-    laps_df['Driver'] = laps_df['Driver'].astype(str).str.upper()
-
-    # Forzar orden de pilotos (en el mismo orden que los ingresados por el usuario, si están presentes)
-    present_drivers = [d for d in pilotos if d in laps_df['Driver'].unique()]
-    if not present_drivers:
-        present_drivers = sorted(laps_df['Driver'].unique())
-    order = present_drivers
-
-    # Preparar paleta: si tienes driver_colors, generar lista en orden
-    # Si no existe driver_colors, usar palette 'Set2'
     try:
+        session, evento, year, sesion_tipo = cargar_sesion()
+
+        # Verificar datos disponibles
+        checks = verificar_datos_sesion(session)
+        if not checks['laps']:
+            print("❌ No hay datos de vueltas disponibles para esta sesión")
+            return
+
+        # Pedir pilotos
+        while True:
+            pilotos = input("Introduce códigos de pilotos separados por coma (mínimo 2, ej: VER,LEC,HAM): ")
+            pilotos = [p.strip().upper() for p in pilotos.split(",") if p.strip()]
+            if len(pilotos) >= 2:
+                break
+            else:
+                print("⚠️ Debes ingresar al menos 2 pilotos.")
+
+        # Filtrar vueltas rápidas de esos pilotos
+        laps = session.laps.pick_drivers(pilotos).pick_quicklaps()
+
+        # Convertir a DataFrame por seguridad
+        laps_df = pd.DataFrame(laps)
+
+        if laps_df.empty:
+            print("❌ No se encontraron vueltas válidas para los pilotos seleccionados")
+            return
+
+        # --- Diagnóstico rápido
+        print("\n--- Diagnóstico de columnas y tipos ---")
+        print(laps_df.dtypes)
+        print("Pilotos encontrados:", sorted(laps_df['Driver'].unique().tolist()))
+        print("Primeras filas:")
+        print(laps_df[['Driver','LapTime','LapNumber']].head())
+
+        # Asegurar LapTimeSeconds (float)
+        if 'LapTime' not in laps_df.columns:
+            raise RuntimeError("No se encontró la columna 'LapTime' en los datos.")
+
+        # Procesar tiempos de vuelta
+        if pd.api.types.is_timedelta64_dtype(laps_df['LapTime']):
+            laps_df['LapTimeSeconds'] = laps_df['LapTime'].dt.total_seconds()
+        else:
+            try:
+                laps_df['LapTime'] = pd.to_timedelta(laps_df['LapTime'])
+                laps_df['LapTimeSeconds'] = laps_df['LapTime'].dt.total_seconds()
+            except Exception:
+                laps_df['LapTimeSeconds'] = pd.to_numeric(laps_df['LapTime'], errors='coerce')
+
+        # Quitar filas sin tiempo
+        laps_df = laps_df.dropna(subset=['LapTimeSeconds'])
+        laps_df = laps_df[laps_df['LapTimeSeconds'] > 0]
+
+        if laps_df.empty:
+            raise RuntimeError("No quedan vueltas con tiempo válido después del filtrado.")
+
+        # Asegurar que la columna Driver sea string y los códigos estén en mayúsculas
+        laps_df['Driver'] = laps_df['Driver'].astype(str).str.upper()
+
+        # Forzar orden de pilotos
+        present_drivers = [d for d in pilotos if d in laps_df['Driver'].unique()]
+        if not present_drivers:
+            present_drivers = sorted(laps_df['Driver'].unique())
+        order = present_drivers
+
+        # Preparar paleta
         palette_list = [driver_colors.get(d, "#888888") for d in order]
-    except Exception:
-        palette_list = None
 
-    # Crear carpeta para figuras
-    out_dir = "output/figures"
-    os.makedirs(out_dir, exist_ok=True)
-    fname = f"{out_dir}/violin_comparacion_{evento['EventName'].replace(' ','_')}_{year}_{sesion_tipo}.png"
+        # Crear carpeta para figuras
+        out_dir = "output/figures"
+        os.makedirs(out_dir, exist_ok=True)
+        fname = f"{out_dir}/violin_comparacion_{evento['EventName'].replace(' ','_')}_{year}_{sesion_tipo}.png"
 
-    # Estilo y tema
-    plt.style.use("default")  # Resetear a estilo por defecto
-    sns.set_theme(style="darkgrid")  # Seaborn maneja el estilo
+        # Estilo y tema
+        plt.style.use("default")
+        sns.set_theme(style="darkgrid")
 
-    fig, ax = plt.subplots(figsize=(12, 7))
+        fig, ax = plt.subplots(figsize=(12, 7))
 
-    # Verificar que tenemos datos para cada piloto
-    print(f"\n--- Verificación final antes del gráfico ---")
-    print(f"Pilotos en order: {order}")
-    for driver in order:
-        driver_data = laps_df[laps_df['Driver'] == driver]
-        print(f"Piloto {driver}: {len(driver_data)} vueltas")
+        # Verificar que tenemos datos para cada piloto
+        print(f"\n--- Verificación final antes del gráfico ---")
+        print(f"Pilotos en order: {order}")
+        for driver in order:
+            driver_data = laps_df[laps_df['Driver'] == driver]
+            print(f"Piloto {driver}: {len(driver_data)} vueltas")
 
-    # Crear el violin plot
-    sns.violinplot(
-        data=laps_df,
-        x="Driver",
-        y="LapTimeSeconds",
-        order=order,
-        palette=palette_list,
-        inner="quartile",
-        cut=0,
-        linewidth=1.0,
-        ax=ax
-    )
+        # Crear el violin plot
+        sns.violinplot(
+            data=laps_df,
+            x="Driver",
+            y="LapTimeSeconds",
+            order=order,
+            palette=palette_list,
+            inner="quartile",
+            cut=0,
+            linewidth=1.0,
+            ax=ax
+        )
 
-   # CORREGIDO: Puntos individuales encima (más legible)
-    sns.stripplot(
-    data=laps_df,
-    x="Driver",
-    y="LapTimeSeconds",
-    hue="Driver",           # asignación explícita
-    order=order,
-    palette="light:yellow",  # CORREGIDO: en lugar de color='yellow'
-    size=3,
-    jitter=True,
-    alpha=0.7,
-    ax=ax,
-    legend=False            # ← NUEVO: evitar leyenda duplicada
-    )
+        # CORREGIDO: Puntos individuales encima (versión funcional)
+        sns.stripplot(
+            data=laps_df,
+            x="Driver",
+            y="LapTimeSeconds",
+            order=order,
+            color='yellow',
+            size=3,
+            jitter=True,
+            alpha=0.7,
+            ax=ax,
+            legend=False
+        )
 
+        # Formatear eje Y en mm:ss.s (ej: 1:12.34)
+        def format_mmss(x, pos=None):
+            if pd.isna(x) or x <= 0:
+                return ""
+            mins = int(x // 60)
+            secs = x % 60
+            return f"{mins}:{secs:05.2f}"
 
-    # Formatear eje Y en mm:ss.s (ej: 1:12.34)
-    def format_mmss(x, pos=None):
-        if pd.isna(x) or x <= 0:
-            return ""
-        mins = int(x // 60)
-        secs = x % 60
-        return f"{mins}:{secs:05.2f}"
+        ax.yaxis.set_major_formatter(ticker.FuncFormatter(format_mmss))
 
-    ax.yaxis.set_major_formatter(ticker.FuncFormatter(format_mmss))
+        # Configuración mejorada de etiquetas
+        ax.set_xticks(range(len(order)))
+        ax.set_xticklabels(order, rotation=45, ha='right')
 
-    # CONFIGURACIÓN MEJORADA DE ETIQUETAS
-    # Asegurar que las etiquetas del eje X sean visibles
-    ax.set_xticks(range(len(order)))  # Forzar posiciones de ticks
-    ax.set_xticklabels(order, rotation=45, ha='right')  # Etiquetas explícitas
+        # Configurar colores para mejor contraste
+        ax.tick_params(axis='x', labelsize=12, colors='black')
+        ax.tick_params(axis='y', labelsize=10, colors='black')
+        ax.set_xlabel("Piloto", color='black', fontsize=12, fontweight='bold')
+        ax.set_ylabel("Tiempo de vuelta (mm:ss.ss)", color='black', fontsize=12, fontweight='bold')
+        ax.set_title(f"Comparación de ritmo - {evento['EventName']} {year} - {sesion_tipo}",
+                     color='black', fontsize=14, fontweight='bold')
 
-    # Configurar colores para mejor contraste
-    ax.tick_params(axis='x', labelsize=12, colors='black')
-    ax.tick_params(axis='y', labelsize=10, colors='black')
-    ax.set_xlabel("Piloto", color='black', fontsize=12, fontweight='bold')
-    ax.set_ylabel("Tiempo de vuelta (mm:ss.ss)", color='black', fontsize=12, fontweight='bold')
-    ax.set_title(f"Comparación de ritmo - {evento['EventName']} {year} - {sesion_tipo}",
-                 color='black', fontsize=14, fontweight='bold')
+        # Añadir grid para mejor legibilidad
+        ax.grid(True, alpha=0.3)
 
-    # Añadir grid para mejor legibilidad
-    ax.grid(True, alpha=0.3)
+        # Asegurar que todo sea visible
+        plt.setp(ax.get_xticklabels(), visible=True)
+        plt.setp(ax.get_yticklabels(), visible=True)
 
-    # Asegurar que todo sea visible
-    plt.setp(ax.get_xticklabels(), visible=True)
-    plt.setp(ax.get_yticklabels(), visible=True)
+        # Ajustar layout y guardar
+        plt.tight_layout()
+        plt.savefig(fname, dpi=300, bbox_inches='tight', facecolor='white')
+        print(f"\nGráfico guardado en: {fname}")
 
-    # Ajustar layout y guardar
-    plt.tight_layout()
-    plt.savefig(fname, dpi=300, bbox_inches='tight', facecolor='white')
-    print(f"\nGráfico guardado en: {fname}")
+        # Mostrar información adicional
+        print(f"\n--- Resumen estadístico ---")
+        for driver in order:
+            driver_times = laps_df[laps_df['Driver'] == driver]['LapTimeSeconds']
+            if len(driver_times) > 0:
+                avg_time = driver_times.mean()
+                best_time = driver_times.min()
+                print(f"{driver}: Mejor = {format_mmss(best_time)}, Media = {format_mmss(avg_time)}, Vueltas = {len(driver_times)}")
 
-    # Mostrar información adicional
-    print(f"\n--- Resumen estadístico ---")
-    for driver in order:
-        driver_times = laps_df[laps_df['Driver'] == driver]['LapTimeSeconds']
-        if len(driver_times) > 0:
-            avg_time = driver_times.mean()
-            best_time = driver_times.min()
-            print(f"{driver}: Mejor = {format_mmss(best_time)}, Media = {format_mmss(avg_time)}, Vueltas = {len(driver_times)}")
+        plt.show()
 
-    plt.show()
-
+    except Exception as e:
+        logger.error(f"Error en comparación de pilotos: {e}")
+        print(f"❌ Error: {e}")
 
 # ----------------------------------------------------------------------------
-# Pilot inividual
+# Piloto individual
 # ----------------------------------------------------------------------------
 def accion_piloto_individual():
     """Ritmo de un piloto específico en una sesión con análisis de compuestos"""
-    # Cargar sesión usando la función común
-    session, evento, year, sesion_tipo = cargar_sesion()
+    try:
+        session, evento, year, sesion_tipo = cargar_sesion()
 
-    piloto = input("Código de piloto (ej: VER, HAM, ALO): ").upper()
+        # Verificar datos disponibles
+        checks = verificar_datos_sesion(session)
+        if not checks['laps']:
+            print("❌ No hay datos de vueltas disponibles para esta sesión")
+            return
 
-    # Obtener todas las vueltas del piloto (no solo las rápidas)
-    laps = session.laps.pick_driver(piloto)
+        piloto = input("Código de piloto (ej: VER, HAM, ALO): ").upper()
 
-    if laps.empty:
-        print(f"❌ No se encontraron vueltas para el piloto {piloto}")
-        return
+        # Obtener todas las vueltas del piloto (no solo las rápidas)
+        laps = session.laps.pick_driver(piloto)
 
-    # Convertir a DataFrame para mayor control
-    laps_df = pd.DataFrame(laps)
+        if laps.empty:
+            print(f"❌ No se encontraron vueltas para el piloto {piloto}")
+            return
 
-    # Procesar tiempos de vuelta
-    if 'LapTime' in laps_df.columns and pd.api.types.is_timedelta64_dtype(laps_df['LapTime']):
-        laps_df['LapTimeSeconds'] = laps_df['LapTime'].dt.total_seconds()
-    else:
-        print("⚠️ No se pudieron procesar los tiempos de vuelta")
-        return
+        # Convertir a DataFrame para mayor control
+        laps_df = pd.DataFrame(laps)
 
-    # Filtrar vueltas válidas
-    laps_df = laps_df.dropna(subset=['LapTimeSeconds'])
-    laps_df = laps_df[laps_df['LapTimeSeconds'] > 0]
+        # Procesar tiempos de vuelta
+        if 'LapTime' in laps_df.columns and pd.api.types.is_timedelta64_dtype(laps_df['LapTime']):
+            laps_df['LapTimeSeconds'] = laps_df['LapTime'].dt.total_seconds()
+        else:
+            print("⚠️ No se pudieron procesar los tiempos de vuelta")
+            return
 
-    if laps_df.empty:
-        print(f"❌ No hay vueltas válidas para el piloto {piloto}")
-        return
+        # Filtrar vueltas válidas
+        laps_df = laps_df.dropna(subset=['LapTimeSeconds'])
+        laps_df = laps_df[laps_df['LapTimeSeconds'] > 0]
 
-    # Crear el gráfico
-    plt.style.use('default')
-    sns.set_theme(style="whitegrid")
+        if laps_df.empty:
+            print(f"❌ No hay vueltas válidas para el piloto {piloto}")
+            return
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
+        # Crear el gráfico
+        plt.style.use('default')
+        sns.set_theme(style="whitegrid")
 
-    # GRÁFICO 1: Violin plot con puntos por compuesto
-    # Preparar datos para el violin plot
-    tiempos_totales = laps_df['LapTimeSeconds'].dropna()
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
 
-    # Crear violin plot base
-    violin_parts = ax1.violinplot([tiempos_totales], showmeans=True, showmedians=True)
+        # GRÁFICO 1: Violin plot con puntos por compuesto
+        tiempos_totales = laps_df['LapTimeSeconds'].dropna()
 
-    # Personalizar el violin plot
-    for pc in violin_parts['bodies']:
-        pc.set_facecolor('lightblue')
-        pc.set_alpha(0.6)
+        # Crear violin plot base
+        violin_parts = ax1.violinplot([tiempos_totales], showmeans=True, showmedians=True)
 
-    violin_parts['cmeans'].set_color('red')
-    violin_parts['cmedians'].set_color('black')
+        # Personalizar el violin plot
+        for pc in violin_parts['bodies']:
+            pc.set_facecolor('lightblue')
+            pc.set_alpha(0.6)
 
-    # Añadir puntos individuales coloreados por compuesto
-    for idx, lap in laps_df.iterrows():
-        compound = lap['Compound'] if pd.notna(lap['Compound']) else 'UNKNOWN'
-        color = compound_colors.get(compound, 'gray')
+        violin_parts['cmeans'].set_color('red')
+        violin_parts['cmedians'].set_color('black')
 
-        # Jitter para evitar superposición de puntos
-        jitter = np.random.normal(0, 0.02)
+        # Añadir puntos individuales coloreados por compuesto
+        for idx, lap in laps_df.iterrows():
+            compound = lap['Compound'] if pd.notna(lap['Compound']) else 'UNKNOWN'
+            color = compound_colors.get(compound, 'gray')
 
-        ax1.scatter(1 + jitter, lap['LapTimeSeconds'],
-                   c=color, s=50, alpha=0.7, edgecolors='black', linewidth=0.5,
-                   label=compound if compound not in [l.get_label() for l in ax1.collections] else "")
+            # Jitter para evitar superposición de puntos
+            jitter = np.random.normal(0, 0.02)
 
-    ax1.set_xlabel('Distribución', fontsize=12, fontweight='bold')
-    ax1.set_ylabel('Tiempo de Vuelta (segundos)', fontsize=12, fontweight='bold')
-    ax1.set_title(f'Distribución de Tiempos - {piloto}', fontsize=14, fontweight='bold')
-    ax1.set_xticks([1])
-    ax1.set_xticklabels([f'{piloto}\n(n={len(tiempos_totales)} vueltas)'])
+            ax1.scatter(1 + jitter, lap['LapTimeSeconds'],
+                       c=color, s=50, alpha=0.7, edgecolors='black', linewidth=0.5,
+                       label=compound if compound not in [l.get_label() for l in ax1.collections] else "")
 
-    # Formatear eje Y en mm:ss
-    def format_segundos(x, pos=None):
-        if pd.isna(x) or x <= 0:
-            return ""
-        mins = int(x // 60)
-        secs = x % 60
-        return f"{mins}:{secs:05.2f}"
+        ax1.set_xlabel('Distribución', fontsize=12, fontweight='bold')
+        ax1.set_ylabel('Tiempo de Vuelta (segundos)', fontsize=12, fontweight='bold')
+        ax1.set_title(f'Distribución de Tiempos - {piloto}', fontsize=14, fontweight='bold')
+        ax1.set_xticks([1])
+        ax1.set_xticklabels([f'{piloto}\n(n={len(tiempos_totales)} vueltas)'])
 
-    ax1.yaxis.set_major_formatter(plt.FuncFormatter(format_segundos))
+        # Formatear eje Y en mm:ss
+        def format_segundos(x, pos=None):
+            if pd.isna(x) or x <= 0:
+                return ""
+            mins = int(x // 60)
+            secs = x % 60
+            return f"{mins}:{secs:05.2f}"
 
-    # GRÁFICO 2: Evolución de tiempos por vuelta con compuestos
-    laps_df_sorted = laps_df.sort_values('LapNumber')
+        ax1.yaxis.set_major_formatter(plt.FuncFormatter(format_segundos))
 
-    # Scatter plot por número de vuelta
-    for idx, lap in laps_df_sorted.iterrows():
-        compound = lap['Compound'] if pd.notna(lap['Compound']) else 'UNKNOWN'
-        color = compound_colors.get(compound, 'gray')
+        # GRÁFICO 2: Evolución de tiempos por vuelta con compuestos
+        laps_df_sorted = laps_df.sort_values('LapNumber')
 
-        ax2.scatter(lap['LapNumber'], lap['LapTimeSeconds'],
-                   c=color, s=60, alpha=0.8, edgecolors='black', linewidth=0.8,
-                   label=compound if compound not in [l.get_label() for l in ax2.collections] else "")
+        # Scatter plot por número de vuelta
+        for idx, lap in laps_df_sorted.iterrows():
+            compound = lap['Compound'] if pd.notna(lap['Compound']) else 'UNKNOWN'
+            color = compound_colors.get(compound, 'gray')
 
-    # Línea que conecta los puntos
-    ax2.plot(laps_df_sorted['LapNumber'], laps_df_sorted['LapTimeSeconds'],
-            'gray', alpha=0.3, linewidth=1)
+            ax2.scatter(lap['LapNumber'], lap['LapTimeSeconds'],
+                       c=color, s=60, alpha=0.8, edgecolors='black', linewidth=0.8,
+                       label=compound if compound not in [l.get_label() for l in ax2.collections] else "")
 
-    ax2.set_xlabel('Número de Vuelta', fontsize=12, fontweight='bold')
-    ax2.set_ylabel('Tiempo de Vuelta', fontsize=12, fontweight='bold')
-    ax2.set_title(f'Evolución de Tiempos - {piloto}', fontsize=14, fontweight='bold')
-    ax2.yaxis.set_major_formatter(plt.FuncFormatter(format_segundos))
-    ax2.grid(True, alpha=0.3)
+        # Línea que conecta los puntos
+        ax2.plot(laps_df_sorted['LapNumber'], laps_df_sorted['LapTimeSeconds'],
+                'gray', alpha=0.3, linewidth=1)
 
-    # Leyenda unificada para compuestos
-    handles_labels = {}
-    for ax in [ax1, ax2]:
-        for handle, label in zip(*ax.get_legend_handles_labels()):
-            if label not in handles_labels:
-                handles_labels[label] = handle
+        ax2.set_xlabel('Número de Vuelta', fontsize=12, fontweight='bold')
+        ax2.set_ylabel('Tiempo de Vuelta', fontsize=12, fontweight='bold')
+        ax2.set_title(f'Evolución de Tiempos - {piloto}', fontsize=14, fontweight='bold')
+        ax2.yaxis.set_major_formatter(plt.FuncFormatter(format_segundos))
+        ax2.grid(True, alpha=0.3)
 
-    # Crear leyenda única
-    if handles_labels:
-        fig.legend(handles_labels.values(), handles_labels.keys(),
-                  title="Compuestos", loc='upper center',
-                  bbox_to_anchor=(0.5, 0.05), ncol=len(handles_labels))
+        # Leyenda unificada para compuestos
+        handles_labels = {}
+        for ax in [ax1, ax2]:
+            for handle, label in zip(*ax.get_legend_handles_labels()):
+                if label not in handles_labels:
+                    handles_labels[label] = handle
 
-    # Título general
-    fig.suptitle(f'Análisis de Ritmo - {piloto} - {evento["EventName"]} {year} - {sesion_tipo}',
-                 fontsize=16, fontweight='bold', y=0.98)
+        # Crear leyenda única
+        if handles_labels:
+            fig.legend(handles_labels.values(), handles_labels.keys(),
+                      title="Compuestos", loc='upper center',
+                      bbox_to_anchor=(0.5, 0.05), ncol=len(handles_labels))
 
-    # Estadísticas resumen
-    print(f"\n📊 ESTADÍSTICAS DE {piloto}:")
-    print("="*50)
-    print(f"Vueltas totales: {len(laps_df)}")
-    print(f"Mejor tiempo: {format_segundos(laps_df['LapTimeSeconds'].min())}")
-    print(f"Tiempo promedio: {format_segundos(laps_df['LapTimeSeconds'].mean())}")
-    print(f"Consistencia (std): {laps_df['LapTimeSeconds'].std():.2f} segundos")
+        # Título general
+        fig.suptitle(f'Análisis de Ritmo - {piloto} - {evento["EventName"]} {year} - {sesion_tipo}',
+                     fontsize=16, fontweight='bold', y=0.98)
 
-    # Análisis por compuestos
-    if 'Compound' in laps_df.columns:
-        print(f"\n🏁 ANÁLISIS POR COMPUESTOS:")
-        compounds_used = laps_df['Compound'].value_counts()
-        for compound, count in compounds_used.items():
-            if pd.notna(compound):
-                compound_times = laps_df[laps_df['Compound'] == compound]['LapTimeSeconds']
-                if len(compound_times) > 0:
-                    print(f"  {compound}: {count} vueltas | Mejor: {format_segundos(compound_times.min())} | Promedio: {format_segundos(compound_times.mean())}")
+        # Estadísticas resumen
+        print(f"\n📊 ESTADÍSTICAS DE {piloto}:")
+        print("="*50)
+        print(f"Vueltas totales: {len(laps_df)}")
+        print(f"Mejor tiempo: {format_segundos(laps_df['LapTimeSeconds'].min())}")
+        print(f"Tiempo promedio: {format_segundos(laps_df['LapTimeSeconds'].mean())}")
+        print(f"Consistencia (std): {laps_df['LapTimeSeconds'].std():.2f} segundos")
 
-    plt.tight_layout()
-    plt.subplots_adjust(bottom=0.15)  # Espacio para la leyenda
-    plt.show()
+        # Análisis por compuestos
+        if 'Compound' in laps_df.columns:
+            print(f"\n🏁 ANÁLISIS POR COMPUESTOS:")
+            compounds_used = laps_df['Compound'].value_counts()
+            for compound, count in compounds_used.items():
+                if pd.notna(compound):
+                    compound_times = laps_df[laps_df['Compound'] == compound]['LapTimeSeconds']
+                    if len(compound_times) > 0:
+                        print(f"  {compound}: {count} vueltas | Mejor: {format_segundos(compound_times.min())} | Promedio: {format_segundos(compound_times.mean())}")
 
-    # Opcional: Guardar gráfico
-    guardar = input("¿Guardar gráfico? (s/n): ").lower()
-    if guardar == 's':
-        out_dir = "output/figures"
-        os.makedirs(out_dir, exist_ok=True)
-        filename = f"{out_dir}/ritmo_individual_{piloto}_{evento['EventName'].replace(' ','_')}_{year}_{sesion_tipo}.png"
-        plt.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white')
-        print(f"💾 Gráfico guardado en: {filename}")
+        plt.tight_layout()
+        plt.subplots_adjust(bottom=0.15)  # Espacio para la leyenda
+
+        # Opcional: Guardar gráfico
+        guardar = input("¿Guardar gráfico? (s/n): ").lower()
+        if guardar == 's':
+            out_dir = "output/figures"
+            os.makedirs(out_dir, exist_ok=True)
+            filename = f"{out_dir}/ritmo_individual_{piloto}_{evento['EventName'].replace(' ','_')}_{year}_{sesion_tipo}.png"
+            plt.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white')
+            print(f"💾 Gráfico guardado en: {filename}")
+
+        plt.show()
+
+    except Exception as e:
+        logger.error(f"Error en análisis individual: {e}")
+        print(f"❌ Error: {e}")
 
 # ----------------------------------------------------------------------------
 # Comparación tiempos por vuelta
 # ----------------------------------------------------------------------------
 def accion_comparar_tiempos_vuelta():
     """Compara tiempos de vuelta entre pilotos en formato de tabla detallada."""
-
-    # Cargar sesión (usando tu función existente)
     try:
         session, evento, year, sesion_tipo = cargar_sesion()
-    except Exception as e:
-        print(f"❌ Error al cargar sesión: {e}")
-        return
 
-    # Pedir pilotos a comparar
-    while True:
-        pilotos_input = input("\nIntroduce códigos de pilotos separados por coma (ej: VER,LEC,HAM): ")
-        pilotos = [p.strip().upper() for p in pilotos_input.split(",") if p.strip()]
+        # Verificar datos disponibles
+        checks = verificar_datos_sesion(session)
+        if not checks['laps']:
+            print("❌ No hay datos de vueltas disponibles para esta sesión")
+            return
 
-        if len(pilotos) >= 2:
-            break
-        else:
-            print("⚠️ Debes ingresar al menos 2 pilotos.")
+        # Pedir pilotos a comparar
+        while True:
+            pilotos_input = input("\nIntroduce códigos de pilotos separados por coma (ej: VER,LEC,HAM): ")
+            pilotos = [p.strip().upper() for p in pilotos_input.split(",") if p.strip()]
 
-    print(f"\n📊 Cargando datos de {evento['EventName']} {year} - {sesion_tipo}...")
+            if len(pilotos) >= 2:
+                break
+            else:
+                print("⚠️ Debes ingresar al menos 2 pilotos.")
 
-    # Cargar vueltas de todos los pilotos seleccionados
-    try:
+        print(f"\n📊 Cargando datos de {evento['EventName']} {year} - {sesion_tipo}...")
+
+        # Cargar vueltas de todos los pilotos seleccionados
         laps = session.laps.pick_drivers(pilotos)
 
         if len(laps) == 0:
@@ -410,47 +488,43 @@ def accion_comparar_tiempos_vuelta():
             return
 
         laps_df = pd.DataFrame(laps)
+        laps_df = procesar_tiempos_vuelta(laps_df)
+
+        if laps_df.empty:
+            print("❌ No hay datos válidos después del procesamiento")
+            return
+
+        # Mostrar diferentes opciones de visualización
+        while True:
+            print(f"\n🎯 OPCIONES DE COMPARACIÓN PARA {', '.join(pilotos)}:")
+            print("1. Tabla completa de todas las vueltas")
+            print("2. Solo vueltas rápidas (mejores tiempos)")
+            print("3. Comparativa por stint (neumáticos)")
+            print("4. Resumen estadístico completo")
+            print("5. Volver al menú principal")
+
+            opcion = input("\nSelecciona una opción (1-5): ").strip()
+
+            if opcion == '1':
+                mostrar_tabla_completa(laps_df, pilotos, evento, year, sesion_tipo)
+            elif opcion == '2':
+                mostrar_vueltas_rapidas(laps_df, pilotos, evento, year, sesion_tipo)
+            elif opcion == '3':
+                mostrar_comparativa_stints(laps_df, pilotos, evento, year, sesion_tipo)
+            elif opcion == '4':
+                mostrar_resumen_estadistico(laps_df, pilotos, evento, year, sesion_tipo)
+            elif opcion == '5':
+                print("Volviendo al menú principal...")
+                break
+            else:
+                print("❌ Opción inválida. Intenta nuevamente.")
 
     except Exception as e:
-        print(f"❌ Error al cargar vueltas: {e}")
-        return
-
-    # Procesar tiempos de vuelta
-    laps_df = procesar_tiempos_vuelta(laps_df)
-
-    if laps_df.empty:
-        print("❌ No hay datos válidos después del procesamiento")
-        return
-
-    # Mostrar diferentes opciones de visualización
-    while True:
-        print(f"\n🎯 OPCIONES DE COMPARACIÓN PARA {', '.join(pilotos)}:")
-        print("1. Tabla completa de todas las vueltas")
-        print("2. Solo vueltas rápidas (mejores tiempos)")
-        print("3. Comparativa por stint (neumáticos)")
-        print("4. Resumen estadístico completo")
-        print("5. Volver al menú principal")
-
-        opcion = input("\nSelecciona una opción (1-5): ").strip()
-
-        if opcion == '1':
-            mostrar_tabla_completa(laps_df, pilotos, evento, year, sesion_tipo)
-        elif opcion == '2':
-            mostrar_vueltas_rapidas(laps_df, pilotos, evento, year, sesion_tipo)
-        elif opcion == '3':
-            mostrar_comparativa_stints(laps_df, pilotos, evento, year, sesion_tipo)
-        elif opcion == '4':
-            mostrar_resumen_estadistico(laps_df, pilotos, evento, year, sesion_tipo)
-        elif opcion == '5':
-            print("Volviendo al menú principal...")
-            break
-        else:
-            print("❌ Opción inválida. Intenta nuevamente.")
+        logger.error(f"Error en comparación de tiempos: {e}")
+        print(f"❌ Error: {e}")
 
 def procesar_tiempos_vuelta(laps_df):
     """Procesa y convierte los tiempos de vuelta a formato usable."""
-
-    # Crear copia para no modificar el original
     df = laps_df.copy()
 
     # Convertir LapTime a segundos
@@ -483,7 +557,6 @@ def formatear_tiempo(segundos):
 
 def mostrar_tabla_completa(laps_df, pilotos, evento, year, sesion_tipo):
     """Muestra tabla completa con todas las vueltas de cada piloto."""
-
     print(f"\n📋 TABLA COMPLETA DE TIEMPOS - {evento['EventName']} {year} - {sesion_tipo}")
     print(f"Pilotos: {', '.join(pilotos)}")
     print("=" * 120)
@@ -550,7 +623,6 @@ def mostrar_tabla_completa(laps_df, pilotos, evento, year, sesion_tipo):
 
 def mostrar_vueltas_rapidas(laps_df, pilotos, evento, year, sesion_tipo):
     """Muestra solo las mejores vueltas de cada piloto."""
-
     print(f"\n⚡ MEJORES TIEMPOS POR PILOTO - {evento['EventName']} {year} - {sesion_tipo}")
     print("=" * 80)
 
@@ -586,7 +658,6 @@ def mostrar_vueltas_rapidas(laps_df, pilotos, evento, year, sesion_tipo):
 
 def mostrar_comparativa_stints(laps_df, pilotos, evento, year, sesion_tipo):
     """Muestra comparativa organizada por stints (neumáticos)."""
-
     print(f"\n🔄 COMPARATIVA POR STINTS - {evento['EventName']} {year} - {sesion_tipo}")
     print("=" * 100)
 
@@ -618,7 +689,6 @@ def mostrar_comparativa_stints(laps_df, pilotos, evento, year, sesion_tipo):
 
 def mostrar_resumen_estadistico(laps_df, pilotos, evento, year, sesion_tipo):
     """Muestra resumen estadístico completo."""
-
     print(f"\n📈 RESUMEN ESTADÍSTICO - {evento['EventName']} {year} - {sesion_tipo}")
     print("=" * 100)
 
@@ -662,16 +732,20 @@ def mostrar_resumen_estadistico(laps_df, pilotos, evento, year, sesion_tipo):
 # ----------------------------------------------------------------------------
 def accion_eficiencia_aerodinamica_detallada():
     """Versión más detallada que usa datos específicos de la trampa de velocidad."""
-
     try:
         session, evento, year, sesion_tipo = cargar_sesion()
-    except Exception as e:
-        print(f"❌ Error al cargar sesión: {e}")
-        return
 
-    print(f"\n📊 Analizando eficiencia aerodinámica detallada...")
+        # Verificar datos disponibles
+        checks = verificar_datos_sesion(session)
+        if not checks['laps']:
+            print("❌ No hay datos de vueltas disponibles para esta sesión")
+            return
+        if not checks['telemetry']:
+            print("❌ No hay datos de telemetría disponibles para esta sesión")
+            return
 
-    try:
+        print(f"\n📊 Analizando eficiencia aerodinámica detallada...")
+
         laps = session.laps.pick_quicklaps()
         equipos = laps['Team'].unique()
 
@@ -700,7 +774,6 @@ def accion_eficiencia_aerodinamica_detallada():
             velocidad_maxima = telemetria['Speed'].max()
 
             # Para la trampa de velocidad, usamos el último 10% de la vuelta (normalmente recta principal)
-            # Esto es más robusto que depender de los datos del circuito
             ultimo_segmento = telemetria.tail(max(1, len(telemetria) // 10))
             velocidad_trampa = ultimo_segmento['Speed'].max()
 
@@ -721,13 +794,11 @@ def accion_eficiencia_aerodinamica_detallada():
             print("❌ No se pudieron procesar datos para ningún equipo")
 
     except Exception as e:
-        print(f"❌ Error en análisis detallado: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error en análisis de eficiencia: {e}")
+        print(f"❌ Error: {e}")
 
 def crear_grafico_eficiencia_recta(resultados_equipos, evento, year, sesion_tipo):
     """Crea el gráfico de eficiencia en recta: Velocidad en Trampa vs Velocidad Promedio."""
-
     # Configuración del estilo
     plt.style.use('default')
     sns.set_theme(style="darkgrid")
@@ -750,9 +821,9 @@ def crear_grafico_eficiencia_recta(resultados_equipos, evento, year, sesion_tipo
         # Etiqueta con nombre del equipo - SIN recuadro de anotaciones
         ax.annotate(equipo,
                    (v_promedio[i], v_trampa[i]),
-                   xytext=(5, 5), textcoords='offset points',  # Offset más pequeño
+                   xytext=(5, 5), textcoords='offset points',
                    fontsize=9, fontweight='bold',
-                   alpha=0.9)  # Texto simple sin caja
+                   alpha=0.9)
 
     # Línea de tendencia
     if len(v_promedio) > 1:
@@ -772,7 +843,7 @@ def crear_grafico_eficiencia_recta(resultados_equipos, evento, year, sesion_tipo
     ax.grid(True, alpha=0.3)
     ax.set_axisbelow(True)
 
-    # Leyenda de tendencia (opcional, solo si hay línea de tendencia)
+    # Leyenda de tendencia
     if len(v_promedio) > 1:
         ax.legend(loc='best')
 
@@ -840,16 +911,20 @@ def crear_grafico_eficiencia_recta(resultados_equipos, evento, year, sesion_tipo
 # ==========================================================================
 def accion_eficiencia_general():
     """Analiza la eficiencia general: Velocidad Máxima vs Velocidad Promedio"""
-
     try:
         session, evento, year, sesion_tipo = cargar_sesion()
-    except Exception as e:
-        print(f"❌ Error al cargar sesión: {e}")
-        return
 
-    print(f"\n📊 Analizando eficiencia general...")
+        # Verificar datos disponibles
+        checks = verificar_datos_sesion(session)
+        if not checks['laps']:
+            print("❌ No hay datos de vueltas disponibles para esta sesión")
+            return
+        if not checks['telemetry']:
+            print("❌ No hay datos de telemetría disponibles para esta sesión")
+            return
 
-    try:
+        print(f"\n📊 Analizando eficiencia general...")
+
         laps = session.laps.pick_quicklaps()
         equipos = laps['Team'].unique()
 
@@ -893,9 +968,8 @@ def accion_eficiencia_general():
             print("❌ No se pudieron procesar datos para ningún equipo")
 
     except Exception as e:
-        print(f"❌ Error en análisis general: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error en análisis general: {e}")
+        print(f"❌ Error: {e}")
 
 def crear_grafico_eficiencia_general(resultados_equipos, evento, year, sesion_tipo):
     """Crea el gráfico de eficiencia general: Velocidad Máxima vs Velocidad Promedio."""
@@ -1005,6 +1079,7 @@ def crear_grafico_eficiencia_general(resultados_equipos, evento, year, sesion_ti
     print(f"\n💾 Gráfico guardado en: {filename}")
 
     plt.show()
+
 # ==========================================================================
 # Verificación de disponibilidad de datos
 # ==========================================================================
@@ -1013,7 +1088,6 @@ def verificar_disponibilidad_datos():
     Verifica si los datos de una sesión específica están disponibles.
     Utiliza las funciones existentes elegir_gp() y elegir_sesion()
     """
-
     try:
         print(f"\n🔍 VERIFICADOR DE DISPONIBILIDAD DE DATOS")
         print("=" * 50)
@@ -1161,7 +1235,6 @@ def salir():
     print("   Desarrollado para amantes del motorsport 🏎️")
     print("🎌" * 25)
 
-
 def mostrar_banner():
     """Muestra un banner atractivo para el menú principal"""
     banner = """
@@ -1174,6 +1247,7 @@ def mostrar_banner():
 
 # ==========================================================================
 def menu_principal():
+    """Menú principal del programa"""
     while True:
         mostrar_banner()
 
@@ -1182,8 +1256,8 @@ def menu_principal():
         print("│  🎯 1. Comparar ritmo entre pilotos             │")
         print("│  🏁 2. Ritmo de un piloto específico            │")
         print("│  ⏱️ 3. Tabla de tiempos de vuelta               │")
-        print("│  🚀 4. Eficiencia aerodinámica                  │")
-        print("│  📈5. Eficiencia General                       │")
+        print("│  🚀 4. Eficiencia aerodinámica en recta        │")
+        print("│  📈 5. Eficiencia General                       │")
         print("├─────────────────────────────────────────────────┤")
         print("│  🔍 6. Verificar disponibilidad de datos        │")
         print("│  📡 7. Monitor automático de disponibilidad     │")
@@ -1192,7 +1266,7 @@ def menu_principal():
         print("└─────────────────────────────────────────────────┘")
 
         print("\n" + "═" * 50)
-        opcion = input("   🎯 Selecciona una opción (1-7): ").strip()
+        opcion = input("   🎯 Selecciona una opción (1-8): ").strip()
         print("═" * 50)
 
         if opcion == '1':
@@ -1205,12 +1279,11 @@ def menu_principal():
             print("\n⏱️  Generando tabla de tiempos de vuelta...")
             accion_comparar_tiempos_vuelta()
         elif opcion == '4':
-            print("\n📊 Analizando eficiencia aerodinámica...")
+            print("\n📊 Analizando eficiencia aerodinámica en recta...")
             accion_eficiencia_aerodinamica_detallada()
         elif opcion == '5':
-            print("\n📊 Analizando eficiencia aerodinámica...")
+            print("\n📈 Analizando eficiencia general...")
             accion_eficiencia_general()
-
         elif opcion == '6':
             print("\n🔍 Verificando disponibilidad de datos...")
             verificar_disponibilidad_datos()
@@ -1224,11 +1297,9 @@ def menu_principal():
             print("✨" * 25)
             break
         else:
-            print("\n❌ Opción no válida. Por favor, elige un número del 1 al 7.")
-            input("   Presiona Enter para continuar...")
+            print("\n❌ Opción no válida. Por favor, elige un número del 1 al 8.")
 
-# También podemos mejorar la función de salida si existe
+        input("\n   Presiona Enter para continuar...")
+
 if __name__ == "__main__":
     menu_principal()
-
-# Test recatoring
