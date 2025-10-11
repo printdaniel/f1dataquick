@@ -1425,13 +1425,13 @@ def menu_principal():
         print("│  🏁 2. Ritmo de un piloto específico            │")
         print("│  ⏱️ 3. Tabla de tiempos de vuelta               │")
         print("│  🚀 4. Eficiencia aerodinámica en recta         │")
-        print("│  📈 5. Comparar Telemetría                      │")
-        print("│  📈 6. Eficiencia General                       │")
+        print("│  📈 5. Eficiencia General                       │")
+        print("│  📡 6. Comparar Telemetría                      │")
         print("├─────────────────────────────────────────────────┤")
         print("│  🔍 7. Verificar disponibilidad de datos        │")
         print("│  📡 8. Monitor automático de disponibilidad     │")
         print("├─────────────────────────────────────────────────┤")
-        print("│  ❌ 9. Salir del programa                      │")
+        print("│  ❌ 9. Salir del programa                       │")
         print("└─────────────────────────────────────────────────┘")
 
         print("\n" + "═" * 50)
@@ -1452,10 +1452,10 @@ def menu_principal():
             accion_eficiencia_aerodinamica_detallada()
         elif opcion == '5':
             print("\n📈 Comparación de Telemetría")
-            accion_comparar_telemetria()
+            accion_eficiencia_general()
         elif opcion == '6':
             print("\n📊 Analizando eficiencia aerodinámica en recta...")
-            accion_eficiencia_general()
+            accion_comparar_telemetria()
         elif opcion == '7':
             print("\n🔍 Verificando disponibilidad de datos...")
             verificar_disponibilidad_datos()
