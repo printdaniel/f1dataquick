@@ -1083,170 +1083,100 @@ def crear_grafico_eficiencia_general(resultados_equipos, evento, year, sesion_ti
 # Comparación de telemetría entre pilotos
 # ----------------------------------------------------------------------------
 def accion_comparar_telemetria():
-    """Compara telemetría de dos pilotos en la misma sesión"""
+    """Compara la velocidad de múltiples pilotos en la misma sesión"""
     try:
         session, evento, year, sesion_tipo = cargar_sesion()
 
-        # Verificar datos disponibles
         checks = verificar_datos_sesion(session)
-        if not checks['laps']:
-            print("❌ No hay datos de vueltas disponibles para esta sesión")
-            return
-        if not checks['telemetry']:
-            print("❌ No hay datos de telemetría disponibles para esta sesión")
+        if not checks['laps'] or not checks['telemetry']:
+            print("❌ No hay datos suficientes de la sesión.")
             return
 
-        print(f"\n📊 Comparación de Telemetría - {evento['EventName']} {year} - {sesion_tipo}")
+        print(f"\n📊 Comparación de Velocidad - {evento['EventName']} {year} - {sesion_tipo}")
 
-        # Seleccionar pilotos
+        # Permitir más de dos pilotos
         while True:
-            pilotos_input = input("Introduce dos códigos de pilotos separados por coma (ej: VER,HAM): ")
+            pilotos_input = input("Introduce códigos de pilotos separados por coma (ej: VER,HAM,LEC): ")
             pilotos = [p.strip().upper() for p in pilotos_input.split(",") if p.strip()]
-
-            if len(pilotos) == 2:
+            if len(pilotos) >= 2:
                 break
             else:
-                print("⚠️ Debes ingresar exactamente 2 pilotos.")
+                print("⚠️ Debes ingresar al menos 2 pilotos.")
 
-        piloto1, piloto2 = pilotos
+        # Obtener mejores vueltas
+        vueltas = {}
+        for p in pilotos:
+            vuelta = session.laps.pick_driver(p).pick_fastest()
+            if vuelta.empty:
+                print(f"⚠️ No se encontró vuelta válida para {p}")
+                continue
+            vueltas[p] = vuelta
+            print(f"✅ {p}: {vuelta['LapTime']} (Vuelta {vuelta['LapNumber']})")
 
-        # Obtener la mejor vuelta de cada piloto
-        print(f"\n🔍 Buscando mejores vueltas de {piloto1} y {piloto2}...")
-
-        vuelta_piloto1 = session.laps.pick_driver(piloto1).pick_fastest()
-        vuelta_piloto2 = session.laps.pick_driver(piloto2).pick_fastest()
-
-        if vuelta_piloto1.empty or vuelta_piloto2.empty:
-            print(f"❌ No se encontraron vueltas válidas para uno o ambos pilotos")
+        if len(vueltas) < 2:
+            print("❌ No hay suficientes pilotos con vueltas válidas.")
             return
-
-        print(f"✅ {piloto1}: Mejor vuelta {vuelta_piloto1['LapTime']} (Vuelta {vuelta_piloto1['LapNumber']})")
-        print(f"✅ {piloto2}: Mejor vuelta {vuelta_piloto2['LapTime']} (Vuelta {vuelta_piloto2['LapNumber']})")
 
         # Obtener telemetría
-        telemetria1 = vuelta_piloto1.get_telemetry()
-        telemetria2 = vuelta_piloto2.get_telemetry()
+        telemetrias = {p: v.get_telemetry() for p, v in vueltas.items() if not v.get_telemetry().empty}
 
-        if telemetria1.empty or telemetria2.empty:
-            print("❌ No se pudo obtener la telemetría de una o ambas vueltas")
-            return
-
-        # Crear gráficos comparativos
-        crear_comparacion_telemetria(telemetria1, telemetria2, piloto1, piloto2,
-                                   vuelta_piloto1, vuelta_piloto2, evento, year, sesion_tipo)
+        crear_comparacion_velocidad(telemetrias, vueltas, evento, year, sesion_tipo)
 
     except Exception as e:
-        logger.error(f"Error en comparación de telemetría: {e}")
-        print(f"❌ Error: {e}")
+        print(f"❌ Error en comparación de telemetría: {e}")
 
-def crear_comparacion_telemetria(tele1, tele2, piloto1, piloto2,
-                               vuelta1, vuelta2, evento, year, sesion_tipo):
-    """Crea gráficos comparativos de telemetría"""
 
-    # Configuración de estilo
-    plt.style.use('default')
-    sns.set_theme(style="darkgrid")
+def crear_comparacion_velocidad(telemetrias, vueltas, evento, year, sesion_tipo):
+    """Crea gráfico comparativo de velocidad vs distancia para múltiples pilotos"""
 
-    # Crear figura con subplots
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
-    fig.suptitle(f'Comparación de Telemetría - {evento["EventName"]} {year} - {sesion_tipo}',
-                 fontsize=16, fontweight='bold')
+    sns.set_theme(style="darkgrid", context="talk")
 
-    # Colores de los pilotos
-    color1 = driver_colors.get(piloto1, '#FF0000')
-    color2 = driver_colors.get(piloto2, '#0000FF')
+    fig, ax = plt.subplots(figsize=(16, 9))
+    fig.suptitle(f'Velocidad vs Distancia - {evento["EventName"]} {year} - {sesion_tipo}',
+                 fontsize=20, fontweight='bold')
 
-    # 1. COMPARACIÓN DE VELOCIDAD
-    ax1.plot(tele1['Distance'], tele1['Speed'], color=color1, linewidth=2, label=piloto1)
-    ax1.plot(tele2['Distance'], tele2['Speed'], color=color2, linewidth=2, label=piloto2)
-    ax1.set_xlabel('Distancia (m)')
-    ax1.set_ylabel('Velocidad (km/h)')
-    ax1.set_title('Velocidad vs Distancia')
-    ax1.legend()
-    ax1.grid(True, alpha=0.3)
+    # --- Graficar cada piloto ---
+    for piloto, tele in telemetrias.items():
+        if 'Speed' in tele.columns:
+            color = driver_colors.get(piloto, "#888888")
+            ax.plot(tele['Distance'], tele['Speed'],
+                    label=piloto, linewidth=2.2, color=color)
 
-    # 2. COMPARACIÓN DE RPM
-    if 'RPM' in tele1.columns and 'RPM' in tele2.columns:
-        ax2.plot(tele1['Distance'], tele1['RPM'], color=color1, linewidth=2, label=piloto1)
-        ax2.plot(tele2['Distance'], tele2['RPM'], color=color2, linewidth=2, label=piloto2)
-        ax2.set_xlabel('Distancia (m)')
-        ax2.set_ylabel('RPM')
-        ax2.set_title('RPM vs Distancia')
-        ax2.legend()
-        ax2.grid(True, alpha=0.3)
-    else:
-        ax2.text(0.5, 0.5, 'Datos de RPM no disponibles',
-                horizontalalignment='center', verticalalignment='center',
-                transform=ax2.transAxes, fontsize=12)
-        ax2.set_title('RPM vs Distancia (No disponible)')
+    # --- Configuración estética ---
+    ax.set_xlabel('Distancia (m)', fontsize=14)
+    ax.set_ylabel('Velocidad (km/h)', fontsize=14)
+    ax.set_title('Comparación de Velocidad de Vuelta Rápida', fontsize=16, fontweight='bold', pad=12)
+    ax.grid(True, alpha=0.25)
 
-    # 3. COMPARACIÓN DE ACELERACIÓN
-    if 'Throttle' in tele1.columns and 'Throttle' in tele2.columns:
-        ax3.plot(tele1['Distance'], tele1['Throttle'], color=color1, linewidth=2, label=piloto1)
-        ax3.plot(tele2['Distance'], tele2['Throttle'], color=color2, linewidth=2, label=piloto2)
-        ax3.set_xlabel('Distancia (m)')
-        ax3.set_ylabel('Acelerador (%)')
-        ax3.set_title('Acelerador vs Distancia')
-        ax3.legend()
-        ax3.grid(True, alpha=0.3)
-    else:
-        ax3.text(0.5, 0.5, 'Datos de acelerador no disponibles',
-                horizontalalignment='center', verticalalignment='center',
-                transform=ax3.transAxes, fontsize=12)
-        ax3.set_title('Acelerador vs Distancia (No disponible)')
+    # Leyenda centrada arriba
+    handles, labels = ax.get_legend_handles_labels()
+    fig.legend(handles, labels, loc='upper center', ncol=min(6, len(labels)),
+               fontsize=12, frameon=False, bbox_to_anchor=(0.5, 0.98))
 
-    # 4. COMPARACIÓN DE MARCHAS
-    if 'nGear' in tele1.columns and 'nGear' in tele2.columns:
-        ax4.plot(tele1['Distance'], tele1['nGear'], color=color1, linewidth=2, label=piloto1)
-        ax4.plot(tele2['Distance'], tele2['nGear'], color=color2, linewidth=2, label=piloto2)
-        ax4.set_xlabel('Distancia (m)')
-        ax4.set_ylabel('Marcha')
-        ax4.set_title('Marchas vs Distancia')
-        ax4.legend()
-        ax4.grid(True, alpha=0.3)
-    else:
-        ax4.text(0.5, 0.5, 'Datos de marchas no disponibles',
-                horizontalalignment='center', verticalalignment='center',
-                transform=ax4.transAxes, fontsize=12)
-        ax4.set_title('Marchas vs Distancia (No disponible)')
+    plt.tight_layout(rect=[0, 0, 1, 0.93])
 
-    # Ajustar layout
-    plt.tight_layout()
-    plt.subplots_adjust(top=0.94)
+    # --- Info de vueltas ---
+    print("\n📊 INFORMACIÓN DE LAS VUELTAS COMPARADAS:")
+    print("=" * 70)
+    vueltas_ordenadas = sorted(vueltas.items(), key=lambda x: x[1]['LapTime'])
+    for piloto, vuelta in vueltas_ordenadas:
+        print(f"{piloto}: {vuelta['LapTime']}  (Vuelta {vuelta['LapNumber']})")
+    ganador = vueltas_ordenadas[0]
+    print(f"\n🏁 Más rápido: {ganador[0]} con {ganador[1]['LapTime']}")
 
-    # Mostrar información de las vueltas
-    print(f"\n📊 INFORMACIÓN DE LAS VUELTAS COMPARADAS:")
-    print("="*60)
-    print(f"{piloto1}: Tiempo {vuelta1['LapTime']} - Vuelta {vuelta1['LapNumber']}")
-    print(f"{piloto2}: Tiempo {vuelta2['LapTime']} - Vuelta {vuelta2['LapNumber']}")
-
-    # Calcular diferencia de tiempo
-    tiempo1 = vuelta1['LapTime'].total_seconds()
-    tiempo2 = vuelta2['LapTime'].total_seconds()
-    diferencia = abs(tiempo1 - tiempo2)
-
-    def format_diferencia(segundos):
-        mins = int(segundos // 60)
-        secs = segundos % 60
-        return f"{mins}:{secs:06.3f}"
-
-    print(f"⏱️  Diferencia: {format_diferencia(diferencia)}")
-
-    if tiempo1 < tiempo2:
-        print(f"🏆 {piloto1} fue más rápido por {format_diferencia(diferencia)}")
-    else:
-        print(f"🏆 {piloto2} fue más rápido por {format_diferencia(diferencia)}")
-
-    # Guardar gráfico
-    guardar = input("\n💾 ¿Guardar gráfico? (s/n): ").lower()
-    if guardar == 's':
-        out_dir = "output/figures"
-        os.makedirs(out_dir, exist_ok=True)
-        filename = f"{out_dir}/telemetria_comparada_{piloto1}_{piloto2}_{evento['EventName'].replace(' ','_')}_{year}_{sesion_tipo}.png"
-        plt.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white')
-        print(f"✅ Gráfico guardado en: {filename}")
+    # Guardar gráfico automáticamente
+    out_dir = "output/figures"
+    os.makedirs(out_dir, exist_ok=True)
+    filename = f"{out_dir}/velocidad_vs_distancia_{evento['EventName'].replace(' ','_')}_{year}_{sesion_tipo}.png"
+    plt.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white')
+    print(f"\n✅ Gráfico guardado en: {filename}")
 
     plt.show()
+
+
+
+
+
 
 # ==========================================================================
 # Verificación de disponibilidad de datos
