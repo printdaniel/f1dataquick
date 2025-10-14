@@ -3,6 +3,7 @@ from constantes import *
 import fastf1
 import matplotlib.pyplot as plt
 import seaborn as sns
+import plotext as plt
 import pandas as pd
 import os
 import matplotlib.ticker as ticker
@@ -1173,11 +1174,6 @@ def crear_comparacion_velocidad(telemetrias, vueltas, evento, year, sesion_tipo)
 
     plt.show()
 
-
-
-
-
-
 # ==========================================================================
 # Verificación de disponibilidad de datos
 # ==========================================================================
@@ -1344,7 +1340,7 @@ def mostrar_banner():
     print(banner)
 
 # ==========================================================================
-def menu_principal():
+def menu_principal()
     """Menú principal del programa"""
     while True:
         mostrar_banner()

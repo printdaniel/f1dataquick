@@ -6,4 +6,4 @@ numpy
 jupyter
 plotly         # opcional, para gráficos interactivos
 scipy          # análisis estadístico
-
+plotext        # Gráficos en la terminal
