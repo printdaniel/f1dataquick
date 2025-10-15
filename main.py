@@ -1080,99 +1080,6 @@ def crear_grafico_eficiencia_general(resultados_equipos, evento, year, sesion_ti
     print(f"\n💾 Gráfico guardado en: {filename}")
 
     plt.show()
-# ----------------------------------------------------------------------------
-# Comparación de telemetría entre pilotos
-# ----------------------------------------------------------------------------
-def accion_comparar_telemetria():
-    """Compara la velocidad de múltiples pilotos en la misma sesión"""
-    try:
-        session, evento, year, sesion_tipo = cargar_sesion()
-
-        checks = verificar_datos_sesion(session)
-        if not checks['laps'] or not checks['telemetry']:
-            print("❌ No hay datos suficientes de la sesión.")
-            return
-
-        print(f"\n📊 Comparación de Velocidad - {evento['EventName']} {year} - {sesion_tipo}")
-
-        # Permitir más de dos pilotos
-        while True:
-            pilotos_input = input("Introduce códigos de pilotos separados por coma (ej: VER,HAM,LEC): ")
-            pilotos = [p.strip().upper() for p in pilotos_input.split(",") if p.strip()]
-            if len(pilotos) >= 2:
-                break
-            else:
-                print("⚠️ Debes ingresar al menos 2 pilotos.")
-
-        # Obtener mejores vueltas
-        vueltas = {}
-        for p in pilotos:
-            vuelta = session.laps.pick_driver(p).pick_fastest()
-            if vuelta.empty:
-                print(f"⚠️ No se encontró vuelta válida para {p}")
-                continue
-            vueltas[p] = vuelta
-            print(f"✅ {p}: {vuelta['LapTime']} (Vuelta {vuelta['LapNumber']})")
-
-        if len(vueltas) < 2:
-            print("❌ No hay suficientes pilotos con vueltas válidas.")
-            return
-
-        # Obtener telemetría
-        telemetrias = {p: v.get_telemetry() for p, v in vueltas.items() if not v.get_telemetry().empty}
-
-        crear_comparacion_velocidad(telemetrias, vueltas, evento, year, sesion_tipo)
-
-    except Exception as e:
-        print(f"❌ Error en comparación de telemetría: {e}")
-
-
-def crear_comparacion_velocidad(telemetrias, vueltas, evento, year, sesion_tipo):
-    """Crea gráfico comparativo de velocidad vs distancia para múltiples pilotos"""
-
-    sns.set_theme(style="darkgrid", context="talk")
-
-    fig, ax = plt.subplots(figsize=(16, 9))
-    fig.suptitle(f'Velocidad vs Distancia - {evento["EventName"]} {year} - {sesion_tipo}',
-                 fontsize=20, fontweight='bold')
-
-    # --- Graficar cada piloto ---
-    for piloto, tele in telemetrias.items():
-        if 'Speed' in tele.columns:
-            color = driver_colors.get(piloto, "#888888")
-            ax.plot(tele['Distance'], tele['Speed'],
-                    label=piloto, linewidth=2.2, color=color)
-
-    # --- Configuración estética ---
-    ax.set_xlabel('Distancia (m)', fontsize=14)
-    ax.set_ylabel('Velocidad (km/h)', fontsize=14)
-    ax.set_title('Comparación de Velocidad de Vuelta Rápida', fontsize=16, fontweight='bold', pad=12)
-    ax.grid(True, alpha=0.25)
-
-    # Leyenda centrada arriba
-    handles, labels = ax.get_legend_handles_labels()
-    fig.legend(handles, labels, loc='upper center', ncol=min(6, len(labels)),
-               fontsize=12, frameon=False, bbox_to_anchor=(0.5, 0.98))
-
-    plt.tight_layout(rect=[0, 0, 1, 0.93])
-
-    # --- Info de vueltas ---
-    print("\n📊 INFORMACIÓN DE LAS VUELTAS COMPARADAS:")
-    print("=" * 70)
-    vueltas_ordenadas = sorted(vueltas.items(), key=lambda x: x[1]['LapTime'])
-    for piloto, vuelta in vueltas_ordenadas:
-        print(f"{piloto}: {vuelta['LapTime']}  (Vuelta {vuelta['LapNumber']})")
-    ganador = vueltas_ordenadas[0]
-    print(f"\n🏁 Más rápido: {ganador[0]} con {ganador[1]['LapTime']}")
-
-    # Guardar gráfico automáticamente
-    out_dir = "output/figures"
-    os.makedirs(out_dir, exist_ok=True)
-    filename = f"{out_dir}/velocidad_vs_distancia_{evento['EventName'].replace(' ','_')}_{year}_{sesion_tipo}.png"
-    plt.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white')
-    print(f"\n✅ Gráfico guardado en: {filename}")
-
-    plt.show()
 
 # ==========================================================================
 # Verificación de disponibilidad de datos
@@ -1340,7 +1247,7 @@ def mostrar_banner():
     print(banner)
 
 # ==========================================================================
-def menu_principal()
+def menu_principal():
     """Menú principal del programa"""
     while True:
         mostrar_banner()
@@ -1352,12 +1259,11 @@ def menu_principal()
         print("│  ⏱️ 3. Tabla de tiempos de vuelta               │")
         print("│  🚀 4. Eficiencia aerodinámica en recta         │")
         print("│  📈 5. Eficiencia General                       │")
-        print("│  📡 6. Comparar Telemetría                      │")
         print("├─────────────────────────────────────────────────┤")
-        print("│  🔍 7. Verificar disponibilidad de datos        │")
-        print("│  📡 8. Monitor automático de disponibilidad     │")
+        print("│  🔍 6. Verificar disponibilidad de datos        │")
+        print("│  📡 7. Monitor automático de disponibilidad     │")
         print("├─────────────────────────────────────────────────┤")
-        print("│  ❌ 9. Salir del programa                       │")
+        print("│  ❌ 8. Salir del programa                       │")
         print("└─────────────────────────────────────────────────┘")
 
         print("\n" + "═" * 50)
@@ -1380,15 +1286,12 @@ def menu_principal()
             print("\n📈 Comparación de Telemetría")
             accion_eficiencia_general()
         elif opcion == '6':
-            print("\n📊 Analizando eficiencia aerodinámica en recta...")
-            accion_comparar_telemetria()
-        elif opcion == '7':
             print("\n🔍 Verificando disponibilidad de datos...")
             verificar_disponibilidad_datos()
-        elif opcion == '8':
+        elif opcion == '7':
             print("\n📡 Iniciando monitor automático...")
             monitor_disponibilidad_automatico()
-        elif opcion == '9':
+        elif opcion == '8':
             print("\n" + "✨" * 25)
             print("   ¡Gracias por usar F1 Analytics Pro!")
             print("   ¡Hasta la próxima carrera! 🏁")
