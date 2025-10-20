@@ -1,4 +1,4 @@
-# main.py - Análisis de Datos de Fórmula 1
+# Análisis de Datos de Fórmula 1
 from constantes import *
 import fastf1
 import matplotlib.pyplot as plt
@@ -124,7 +124,7 @@ def verificar_datos_sesion(session):
     return checks
 
 # ----------------------------------------------------------------------------
-# Comparación entre pilotos - CORREGIDO
+# Comparación entre pilotos
 # ----------------------------------------------------------------------------
 def accion_comparar_pilotos():
     """Comparar ritmo entre pilotos en una sesión con violin plot (robusto)."""
@@ -227,7 +227,7 @@ def accion_comparar_pilotos():
             ax=ax
         )
 
-        # CORREGIDO: Puntos individuales encima (versión funcional)
+        # Puntos individuales encima (versión funcional)
         sns.stripplot(
             data=laps_df,
             x="Driver",
@@ -774,6 +774,7 @@ def accion_eficiencia_aerodinamica_detallada():
             velocidad_maxima = telemetria['Speed'].max()
 
             # Para la trampa de velocidad, usamos el último 10% de la vuelta (normalmente recta principal)
+            # Checquear la trampa de velocidad de cada circuito.
             ultimo_segmento = telemetria.tail(max(1, len(telemetria) // 10))
             velocidad_trampa = ultimo_segmento['Speed'].max()
 
